@@ -1,0 +1,20 @@
+# Cloudflare Pages / Netlify 會讀這個檔案。
+# connect-src 'none' 讓這個頁面在瀏覽器層級「無法」發出任何網路請求 ——
+# 客戶的照片不可能被上傳，這不是承諾而是強制。
+/*
+  Content-Security-Policy: default-src 'none'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
+  Permissions-Policy: geolocation=(), microphone=(), camera=(), payment=(), interest-cohort=()
+  Cross-Origin-Opener-Policy: same-origin
+
+# Service Worker 需要能抓自己的檔案來建立離線快取，
+# 所以它自己的執行環境要放行 connect-src。頁面本身仍然是 'none'。
+/sw.js
+  Content-Security-Policy: default-src 'none'; script-src 'self'; connect-src 'self'
+  Cache-Control: no-cache
+
+/fonts/*
+  Cache-Control: public, max-age=31536000, immutable
+/icons/*
+  Cache-Control: public, max-age=31536000, immutable

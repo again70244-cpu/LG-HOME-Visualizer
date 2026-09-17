@@ -1,0 +1,18 @@
+{
+  "name": "空間合成工作台",
+  "short_name": "空間合成",
+  "description": "把去背商品圖以真實比例合成進客戶家中照片。所有影像處理都在本機完成，照片不會上傳。",
+  "lang": "zh-Hant",
+  "dir": "ltr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#16181b",
+  "theme_color": "#16181b",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

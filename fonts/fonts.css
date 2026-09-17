@@ -1,0 +1,7 @@
+/* 自架字體：頁面載入後完全不連外，可用飛航模式驗證。
+   Archivo 是可變字體，一個檔案涵蓋 100–900 全部權重。
+   只取 latin 子集 —— 中文由系統字體（Noto Sans TC / PingFang TC）承接。 */
+@font-face{font-family:'Archivo';font-style:normal;font-weight:100 900;font-display:swap;src:url(fonts/Archivo.woff2) format('woff2')}
+@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:400;font-display:swap;src:url(fonts/IBMPlexMono-400.woff2) format('woff2')}
+@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:500;font-display:swap;src:url(fonts/IBMPlexMono-500.woff2) format('woff2')}
+@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:600;font-display:swap;src:url(fonts/IBMPlexMono-600.woff2) format('woff2')}
