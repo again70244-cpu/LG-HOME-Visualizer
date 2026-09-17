@@ -307,13 +307,14 @@ input[type=number]:focus,select:focus{outline:2px solid var(--accent);outline-of
           </label>
           <label class="fld">
             <div class="fld-top"><span>鏡頭視角</span><b id="v-fov">75°</b></div>
-            <input type="range" id="c-fov" min="28" max="110" step="1" value="75">
+            <input type="range" id="c-fov" min="20" max="110" step="1" value="75">
           </label>
           <div class="swatches" style="grid-template-columns:repeat(3,1fr)">
             <button class="sw" data-fov="104" type="button">手機超廣角</button>
             <button class="sw" data-fov="75" type="button">手機主鏡</button>
             <button class="sw" data-fov="48" type="button">相機標準</button>
           </div>
+          <p class="hint" id="fov-src" style="margin-top:-4px">來源：手動設定</p>
           <button class="btn wide" id="btn-vp" type="button">用消失點自動校正</button>
           <button class="btn wide" id="btn-vp-apply" type="button" hidden>套用消失點</button>
           <p class="hint">視平線＝拍照時鏡頭的水平高度，設錯會讓商品整個放大或縮小。<b style="color:var(--ink-dim)">建議用消失點自動校正</b>：在照片上拉兩條沿著地面的線（例如左邊牆腳線、右邊女兒牆底線），交點會同時算出正確的視平線，以及房間的牆面方向 — 轉向角會改成相對牆面，就不會轉錯邊。</p>
@@ -1238,8 +1239,10 @@ $('c-camh').addEventListener('input',syncCamPresets);
 document.querySelectorAll('[data-fov]').forEach(b=>b.addEventListener('click',()=>{
   S.fov=parseFloat(b.dataset.fov);
   $('c-fov').value=S.fov; $('v-fov').textContent=S.fov+'°';
+  setFovSource('來源：手動設定',false);
   paint();
 }));
+$('c-fov').addEventListener('input',()=>setFovSource('來源：手動設定',false));
 $('btn-flip').addEventListener('click',e=>{
   S.flip=!S.flip;
   e.currentTarget.classList.toggle('on',S.flip);
@@ -1298,6 +1301,81 @@ function syncUI(){
 }
 
 /* ============================================================
+   EXIF：直接從照片讀鏡頭資訊，省掉手動選鏡頭這個出錯點
+   ============================================================ */
+function readIFD(dv,base,pos,le,want,out){
+  if(pos<0||pos+2>dv.byteLength) return;
+  const n=dv.getUint16(pos,le);
+  for(let i=0;i<n;i++){
+    const e=pos+2+i*12;
+    if(e+12>dv.byteLength) return;
+    const key=want[dv.getUint16(e,le)];
+    if(!key) continue;
+    const type=dv.getUint16(e+2,le), cnt=dv.getUint32(e+4,le);
+    const sz={1:1,2:1,3:2,4:4,5:8,7:1,9:4,10:8}[type]||1;
+    const total=sz*cnt;
+    const vo = total<=4 ? e+8 : base+dv.getUint32(e+8,le);
+    if(vo<0||vo+Math.min(total,4)>dv.byteLength) continue;
+    if(type===3) out[key]=dv.getUint16(vo,le);
+    else if(type===4) out[key]=dv.getUint32(vo,le);
+    else if(type===5){
+      if(vo+8>dv.byteLength) continue;
+      const den=dv.getUint32(vo+4,le);
+      out[key]= den ? dv.getUint32(vo,le)/den : 0;
+    }
+    else if(type===2){
+      let t='';
+      for(let j=0;j<cnt-1 && vo+j<dv.byteLength;j++){
+        const c=dv.getUint8(vo+j); if(!c) break; t+=String.fromCharCode(c);
+      }
+      out[key]=t.trim();
+    }
+  }
+}
+function readExif(buf){
+  try{
+    const dv=new DataView(buf);
+    if(dv.byteLength<12 || dv.getUint16(0)!==0xFFD8) return null;   // 不是 JPEG
+    let off=2, base=-1;
+    while(off+4<=dv.byteLength){
+      if(dv.getUint8(off)!==0xFF) break;
+      const m=dv.getUint8(off+1);
+      if(m===0xD8||m===0x01||(m>=0xD0&&m<=0xD7)){ off+=2; continue; }
+      if(m===0xDA||m===0xD9) break;
+      const len=dv.getUint16(off+2);
+      if(len<2) break;
+      if(m===0xE1 && off+10<=dv.byteLength){
+        let sig=''; for(let i=0;i<6;i++) sig+=String.fromCharCode(dv.getUint8(off+4+i));
+        if(sig==='Exif\u0000\u0000'){ base=off+10; break; }
+      }
+      off+=2+len;
+    }
+    if(base<0 || base+8>dv.byteLength) return null;
+    const bo=dv.getUint16(base);
+    const le = bo===0x4949 ? true : bo===0x4D4D ? false : null;
+    if(le===null || dv.getUint16(base+2,le)!==0x2A) return null;
+    const out={};
+    readIFD(dv,base,base+dv.getUint32(base+4,le),le,{0x0110:'model',0x8769:'ptr'},out);
+    if(out.ptr) readIFD(dv,base,base+out.ptr,le,{0xA405:'f35',0x920A:'focal',0xA434:'lens'},out);
+    return out;
+  }catch(_){ return null; }
+}
+/* 等效焦距 → 本工具用的「長邊視角」。
+   先由 35mm 片幅對角線（21.635mm）算出對角視角，再依照片實際長寬比換算，
+   這樣 4:3 與 16:9 都準確。 */
+function fovFrom35(f35,W,H){
+  if(!(f35>3 && f35<400) || !(W>0&&H>0)) return null;
+  const diagFov=2*Math.atan(21.635/f35);
+  const fPx=(Math.hypot(W,H)/2)/Math.tan(diagFov/2);
+  return 2*Math.atan((Math.max(W,H)/2)/fPx)*180/Math.PI;
+}
+function setFovSource(txt,auto){
+  const el=$('fov-src');
+  el.textContent=txt;
+  el.style.color = auto ? 'var(--ok)' : 'var(--ink-faint)';
+}
+
+/* ============================================================
    檔案載入
    ============================================================ */
 function readFile(file){
@@ -1305,7 +1383,10 @@ function readFile(file){
     const url=URL.createObjectURL(file);
     const im=new Image();
     im.onload=()=>{ res(im); };
-    im.onerror=()=>{ URL.revokeObjectURL(url); rej(new Error('無法讀取此影像')); };
+    im.onerror=()=>{ URL.revokeObjectURL(url);
+      rej(new Error(/\.hei[cf]$/i.test(file.name||'')
+        ? 'HEIC 格式瀏覽器無法直接開啟。請到 iPhone 設定 → 相機 → 格式，改成「最相容」重拍，或先把檔案轉成 JPEG。'
+        : '無法讀取此影像，請確認檔案格式（建議 JPEG 或 PNG）。')); };
     im.src=url;
   });
 }
@@ -1318,10 +1399,30 @@ function buildRoomSmall(){
   roomSmallData={data:d.data,w:sw,h:sh};
 }
 async function loadRoom(file){
+  let ex=null;
+  try{ ex=readExif(await file.slice(0,512*1024).arrayBuffer()); }catch(_){}
   const im=await readFile(file);
   roomImg=im; usingDemoRoom=false;
   $('nameRoom').textContent=file.name;
+  applyExif(ex, im.naturalWidth||im.width, im.naturalHeight||im.height);
   buildRoomSmall(); rebuildProc(); refreshBadge(); paint();
+}
+
+function applyExif(ex,W,H){
+  const fov = ex && ex.f35 ? fovFrom35(ex.f35,W,H) : null;
+  if(fov){
+    S.fov=clamp(Math.round(fov),20,110);
+    $('c-fov').value=S.fov; $('v-fov').textContent=S.fov+'°';
+    const who=[ex.model,ex.lens].filter(Boolean).join(' · ');
+    setFovSource('來源：EXIF · 等效 '+Math.round(ex.f35)+'mm'+(who?'（'+who+'）':''),true);
+    flash('已從照片讀取鏡頭資訊：等效 '+Math.round(ex.f35)+'mm → 視角 '+S.fov+'°'+(who?'（'+who+'）':'')+'。');
+    return;
+  }
+  S.fov=DEFAULTS.fov;                       // 不要沿用上一張照片的鏡頭
+  $('c-fov').value=S.fov; $('v-fov').textContent=S.fov+'°';
+  setFovSource('來源：手動設定 — 照片沒有鏡頭資訊，已回到預設 '+S.fov+'°',false);
+  const via = ex && (ex.model||ex.focal) ? '' : '（用 LINE、微信之類傳過的照片，EXIF 通常會被移除；請用 AirDrop 或雲端硬碟傳原檔）';
+  flash('這張照片讀不到鏡頭資訊，請自己選鏡頭：0.5× 按「手機超廣角」，1× 按「手機主鏡」。'+via);
 }
 async function loadProd(file){
   const im=await readFile(file);
@@ -1340,13 +1441,13 @@ function wireDrop(wrapId,inputId,handler){
   const wrap=$(wrapId), input=$(inputId);
   input.addEventListener('change',e=>{
     const f=e.target.files&&e.target.files[0];
-    if(f) handler(f).catch(err=>alert(err.message));
+    if(f) handler(f).catch(err=>flash(err.message));
   });
   ['dragenter','dragover'].forEach(t=>wrap.addEventListener(t,e=>{e.preventDefault();wrap.classList.add('over');}));
   ['dragleave','drop'].forEach(t=>wrap.addEventListener(t,e=>{e.preventDefault();wrap.classList.remove('over');}));
   wrap.addEventListener('drop',e=>{
     const f=e.dataTransfer.files&&e.dataTransfer.files[0];
-    if(f) handler(f).catch(err=>alert(err.message));
+    if(f) handler(f).catch(err=>flash(err.message));
   });
 }
 wireDrop('dropRoom','f-room',loadRoom);
