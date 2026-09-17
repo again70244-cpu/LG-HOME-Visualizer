@@ -185,6 +185,11 @@ input[type=number]:focus,select:focus{outline:2px solid var(--accent);outline-of
 .drop input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
 .drop:focus-within{outline:2px solid var(--accent);outline-offset:2px}
 
+.grp{display:flex;flex-direction:column;gap:7px}
+.grp-t{
+  font-size:10px;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--ink-faint);font-family:var(--mono);
+}
 .swatches{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
 .sw{
   border:1px solid var(--line);background:var(--panel-2);border-radius:var(--r);
@@ -345,85 +350,109 @@ input[type=number]:focus,select:focus{outline:2px solid var(--accent);outline-of
           <button class="btn wide" id="btn-flip" type="button">水平鏡射</button>
         </div>
       </section>
-
       <section class="step">
-        <div class="step-hd"><i class="step-n">4</i><h3>陰影與接地</h3><em>影響最大</em></div>
+        <div class="step-hd"><i class="step-n">4</i><h3>光影與融合</h3></div>
         <div class="step-body">
-          <label class="fld">
-            <div class="fld-top"><span>接觸陰影濃度</span><b id="v-contactop">75%</b></div>
-            <input type="range" id="c-contactop" min="0" max="100" step="1" value="75">
-          </label>
-          <label class="fld">
-            <div class="fld-top"><span>接觸陰影範圍</span><b id="v-contactspread">100%</b></div>
-            <input type="range" id="c-contactspread" min="80" max="140" step="1" value="100">
-          </label>
-          <label class="fld">
-            <div class="fld-top"><span>光源方向</span><b id="v-shadowdir">205°</b></div>
-            <input type="range" id="c-shadowdir" min="0" max="360" step="1" value="205">
-          </label>
-          <label class="fld">
-            <div class="fld-top"><span>投射陰影長度</span><b id="v-shadowlen">55%</b></div>
-            <input type="range" id="c-shadowlen" min="0" max="160" step="1" value="55">
-          </label>
-          <label class="fld">
-            <div class="fld-top"><span>陰影柔和度</span><b id="v-shadowsoft">14</b></div>
-            <input type="range" id="c-shadowsoft" min="0" max="60" step="0.5" value="14">
-          </label>
-          <label class="fld">
-            <div class="fld-top"><span>投射陰影濃度</span><b id="v-shadowop">38%</b></div>
-            <input type="range" id="c-shadowop" min="0" max="100" step="1" value="38">
-          </label>
-          <label class="fld">
-            <div class="fld-top"><span>地板倒影（亮面地板適用）</span><b id="v-refl">14%</b></div>
-            <input type="range" id="c-refl" min="0" max="60" step="1" value="14">
-          </label>
-          <p class="hint">接觸陰影是「有沒有真的站在地上」最主要的視覺線索，缺了它其他調再多都沒用。先把它調到剛好，再處理投射陰影。</p>
-        </div>
-      </section>
 
-      <section class="step">
-        <div class="step-hd"><i class="step-n">5</i><h3>影像融合</h3></div>
-        <div class="step-body">
-          <label class="fld">
-            <div class="fld-top"><span>曝光匹配</span><b id="v-harm">55%</b></div>
-            <input type="range" id="c-harm" min="0" max="100" step="1" value="55">
-          </label>
-          <label class="fld">
-            <div class="fld-top"><span>環境染色</span><b id="v-tint">22%</b></div>
-            <input type="range" id="c-tint" min="0" max="100" step="1" value="22">
-          </label>
-          <label class="fld">
-            <div class="fld-top"><span>亮度</span><b id="v-bright">0</b></div>
-            <input type="range" id="c-bright" min="-45" max="45" step="1" value="0">
-          </label>
-          <label class="fld">
-            <div class="fld-top"><span>色溫</span><b id="v-warm">0</b></div>
-            <input type="range" id="c-warm" min="-45" max="45" step="1" value="0">
-          </label>
-          <label class="fld">
-            <div class="fld-top"><span>邊緣修整（去白邊）</span><b id="v-trim">1 px</b></div>
-            <input type="range" id="c-trim" min="0" max="5" step="1" value="1">
-          </label>
-          <label class="fld">
-            <div class="fld-top"><span>雜訊匹配</span><b id="v-grain">35%</b></div>
-            <input type="range" id="c-grain" min="0" max="100" step="1" value="35">
-          </label>
-          <p class="hint">曝光匹配只調亮度、黑階與對比，中性色會保持中性 — 銀色機身不會被暖色地板染成米黃。環境染色是另外的小幅度色偏（有上限），需要更融入環境時再往上加。</p>
-        </div>
-      </section>
-
-      <section class="step">
-        <div class="step-hd"><i class="step-n">6</i><h3>檢視與輸出</h3></div>
-        <div class="step-body">
-          <div class="swatches">
-            <button class="sw" data-preset="soft" type="button">柔和室內</button>
-            <button class="sw" data-preset="hard" type="button">強烈日光</button>
-            <button class="sw" data-preset="flat" type="button">陰天平光</button>
-            <button class="sw" data-preset="reset" type="button">重設</button>
+          <div class="grp">
+            <span class="grp-t">拍攝時的光線</span>
+            <div class="swatches" style="grid-template-columns:repeat(2,1fr)">
+              <button class="sw" data-scene="balcony" type="button">陽台／戶外</button>
+              <button class="sw" data-scene="indoor" type="button">室內燈光</button>
+              <button class="sw" data-scene="cloudy" type="button">陰天／窗邊</button>
+              <button class="sw" data-scene="sun" type="button">陽光直射</button>
+            </div>
           </div>
+
+          <div class="grp">
+            <span class="grp-t">光從哪裡來</span>
+            <div class="row">
+              <button class="btn sm" id="btn-light" type="button" style="flex:1">在照片上點光源</button>
+              <button class="btn sm" id="btn-light-auto" type="button" style="flex:1">自動偵測</button>
+            </div>
+            <p class="hint" id="light-src">尚未設定，使用預設方向。點一下照片裡的窗戶或燈，陰影就會往反方向倒。</p>
+          </div>
+
+          <div class="grp">
+            <span class="grp-t">地板材質</span>
+            <div class="swatches" style="grid-template-columns:repeat(3,1fr)">
+              <button class="sw" data-floor="0" type="button">霧面</button>
+              <button class="sw" data-floor="1" type="button">一般</button>
+              <button class="sw" data-floor="2" type="button">亮面</button>
+            </div>
+            <p class="hint">木地板、水泥選霧面；一般磁磚選一般；拋光石英磚、大理石選亮面 — 亮面地板會映出商品的倒影。</p>
+          </div>
+
+          <button class="btn wide" id="btn-adv" type="button">進階調整</button>
+
+          <div id="adv" hidden style="display:flex;flex-direction:column;gap:11px;margin-top:2px">
+            <span class="grp-t">陰影</span>
+            <label class="fld">
+              <div class="fld-top"><span>接觸陰影濃度</span><b id="v-contactop">88%</b></div>
+              <input type="range" id="c-contactop" min="0" max="100" step="1" value="88">
+            </label>
+            <label class="fld">
+              <div class="fld-top"><span>接觸陰影範圍</span><b id="v-contactspread">100%</b></div>
+              <input type="range" id="c-contactspread" min="80" max="140" step="1" value="100">
+            </label>
+            <label class="fld">
+              <div class="fld-top"><span>光源方向</span><b id="v-shadowdir">205°</b></div>
+              <input type="range" id="c-shadowdir" min="0" max="360" step="1" value="205">
+            </label>
+            <label class="fld">
+              <div class="fld-top"><span>投射陰影長度</span><b id="v-shadowlen">55%</b></div>
+              <input type="range" id="c-shadowlen" min="0" max="160" step="1" value="55">
+            </label>
+            <label class="fld">
+              <div class="fld-top"><span>陰影柔和度</span><b id="v-shadowsoft">14</b></div>
+              <input type="range" id="c-shadowsoft" min="0" max="60" step="0.5" value="14">
+            </label>
+            <label class="fld">
+              <div class="fld-top"><span>投射陰影濃度</span><b id="v-shadowop">48%</b></div>
+              <input type="range" id="c-shadowop" min="0" max="100" step="1" value="48">
+            </label>
+            <label class="fld">
+              <div class="fld-top"><span>地板倒影</span><b id="v-refl">14%</b></div>
+              <input type="range" id="c-refl" min="0" max="60" step="1" value="14">
+            </label>
+
+            <span class="grp-t" style="margin-top:4px">融合</span>
+            <label class="fld">
+              <div class="fld-top"><span>曝光匹配</span><b id="v-harm">55%</b></div>
+              <input type="range" id="c-harm" min="0" max="100" step="1" value="55">
+            </label>
+            <label class="fld">
+              <div class="fld-top"><span>環境染色</span><b id="v-tint">22%</b></div>
+              <input type="range" id="c-tint" min="0" max="100" step="1" value="22">
+            </label>
+            <label class="fld">
+              <div class="fld-top"><span>亮度</span><b id="v-bright">0</b></div>
+              <input type="range" id="c-bright" min="-45" max="45" step="1" value="0">
+            </label>
+            <label class="fld">
+              <div class="fld-top"><span>色溫</span><b id="v-warm">0</b></div>
+              <input type="range" id="c-warm" min="-45" max="45" step="1" value="0">
+            </label>
+            <label class="fld">
+              <div class="fld-top"><span>邊緣修整（去白邊）</span><b id="v-trim">1 px</b></div>
+              <input type="range" id="c-trim" min="0" max="5" step="1" value="1">
+            </label>
+            <label class="fld">
+              <div class="fld-top"><span>雜訊匹配</span><b id="v-grain">35%</b></div>
+              <input type="range" id="c-grain" min="0" max="100" step="1" value="35">
+            </label>
+            <button class="btn wide sm" id="btn-reset-adv" type="button">回到場景預設值</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="step">
+        <div class="step-hd"><i class="step-n">5</i><h3>檢視與輸出</h3></div>
+        <div class="step-body">
           <button class="btn wide" id="btn-compare" type="button">按住比對原圖</button>
         </div>
       </section>
+    </div>
     </div>
 
     <div class="rail-foot">
@@ -462,6 +491,7 @@ const S = {
   shadowDir:205, shadowLen:0.55, shadowSoft:14, shadowOp:0.48,
   refl:0.14,
   harm:0.55, tint:0.22, bright:0, warm:0, trim:1, grain:0.35,
+  scene:'balcony', floor:1, lightPos:null, lightMode:false,
   compare:false
 };
 const DEFAULTS = JSON.parse(JSON.stringify(S));
@@ -808,6 +838,11 @@ function flash(msg){
 /* ============================================================
    繪製
    ============================================================ */
+/* 有指定光源位置就從位置推方向，否則用進階裡的角度 */
+function effShadowDir(g){
+  if(!S.lightPos) return S.shadowDir;
+  return Math.atan2(g.baseY-S.lightPos.y*g.H, g.baseX-S.lightPos.x*g.W)*180/Math.PI;
+}
 function drawShape(ctx,src,cx,by,w,h,keystone,flip){
   ctx.save();
   if(flip){ ctx.translate(cx,0); ctx.scale(-1,1); ctx.translate(-cx,0); }
@@ -953,7 +988,7 @@ function render(ctx,k,track){
 
   // — 投射陰影：把剪影投影到地面（傾斜＋壓縮） —
   if(S.shadowOp>0.005 && S.shadowLen>0.005){
-    const a=S.shadowDir*Math.PI/180;
+    const a=effShadowDir(g)*Math.PI/180;
     const sx=Math.cos(a)*S.shadowLen;
     const sy=Math.sin(a)*S.shadowLen*0.5;
     ctx.save();
@@ -1039,6 +1074,29 @@ function drawGuides(ctx,g){
     return;
   }
 
+  if(S.lightPos){
+    const lx=S.lightPos.x*g.W, ly=S.lightPos.y*g.H;
+    const r=Math.max(7,g.H*0.011);
+    ctx.save();
+    ctx.setLineDash([g.W*0.009,g.W*0.009]);
+    ctx.strokeStyle='rgba(255,206,84,.75)';
+    ctx.lineWidth=Math.max(1.2,g.H*0.002);
+    ctx.beginPath(); ctx.moveTo(lx,ly); ctx.lineTo(g.baseX,g.baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.strokeStyle='rgba(255,206,84,.95)'; ctx.lineWidth=Math.max(2,g.H*0.0028);
+    for(let i=0;i<8;i++){
+      const a=i*Math.PI/4;
+      ctx.beginPath();
+      ctx.moveTo(lx+Math.cos(a)*r*1.45, ly+Math.sin(a)*r*1.45);
+      ctx.lineTo(lx+Math.cos(a)*r*2.15, ly+Math.sin(a)*r*2.15);
+      ctx.stroke();
+    }
+    ctx.beginPath(); ctx.arc(lx,ly,r,0,7);
+    ctx.fillStyle='rgba(255,206,84,1)'; ctx.fill();
+    ctx.strokeStyle='rgba(0,0,0,.6)'; ctx.lineWidth=2; ctx.stroke();
+    ctx.restore();
+  }
+
   const y=g.horizonY;
   ctx.strokeStyle='rgba(212,17,74,.85)'; ctx.lineWidth=Math.max(1,g.H*0.0016);
   ctx.setLineDash([g.W*0.016,g.W*0.012]);
@@ -1081,6 +1139,7 @@ function updateStatus(g){
   const el=$('s-dev');
   el.textContent = dev===0 ? '符合真實比例' : (dev>0?'+':'')+dev+'%';
   el.className = Math.abs(dev)>8 ? 'warn' : '';
+  if(S.lightPos) $('v-shadowdir').textContent=Math.round((effShadowDir(g)+360)%360)+'°';
   const rm=$('s-room');
   rm.textContent = Math.abs(S.roomAngle)>0.05 ? S.roomAngle.toFixed(1)+'°' : '未校正';
   rm.className = Math.abs(S.roomAngle)>0.05 ? '' : 'warn';
@@ -1097,6 +1156,13 @@ function viewPos(e){
 view.addEventListener('pointerdown',e=>{
   if(!roomImg||!prodImg) return;
   const p=viewPos(e);
+  if(S.lightMode){
+    S.lightPos={x:clamp(p.x,-0.6,1.6), y:clamp(p.y,-0.6,1.6)};
+    setLightMode(false); lightLabel();
+    flash('光源已設定，陰影方向已更新。不滿意就再點一次。');
+    e.preventDefault();
+    return;
+  }
   if(S.vpMode){
     let best=-1, bd=1e9;
     S.vpPts.forEach((q,i)=>{
@@ -1255,22 +1321,84 @@ function setCmp(on){ S.compare=on; cmp.classList.toggle('on',on); paint(); }
 ['pointerup','pointerleave','pointercancel'].forEach(t=>cmp.addEventListener(t,()=>setCmp(false)));
 cmp.addEventListener('keydown',e=>{ if(e.key===' '||e.key==='Enter'){e.preventDefault();setCmp(!S.compare);} });
 
-/* 光影情境預設 */
-const PRESETS={
-  soft:{shadowDir:205,shadowLen:0.42,shadowSoft:26,shadowOp:0.28,contactOp:0.72,refl:0.12,grain:0.35},
-  hard:{shadowDir:212,shadowLen:0.95,shadowSoft:7,shadowOp:0.52,contactOp:0.88,refl:0.22,grain:0.30},
-  flat:{shadowDir:200,shadowLen:0.22,shadowSoft:38,shadowOp:0.20,contactOp:0.62,refl:0.06,grain:0.40}
+/* 場景預設：一個按鈕決定 8 個數值。使用者只需要回答「當時的光線像哪一種」。 */
+const SCENES={
+  balcony:{shadowLen:0.55,shadowSoft:14,shadowOp:0.48,contactOp:0.88,contactSpread:1.00,harm:0.55,tint:0.22,grain:0.35},
+  indoor: {shadowLen:0.35,shadowSoft:30,shadowOp:0.26,contactOp:0.80,contactSpread:1.05,harm:0.60,tint:0.28,grain:0.40},
+  cloudy: {shadowLen:0.22,shadowSoft:40,shadowOp:0.18,contactOp:0.70,contactSpread:1.10,harm:0.55,tint:0.25,grain:0.40},
+  sun:    {shadowLen:1.00,shadowSoft:6, shadowOp:0.55,contactOp:0.92,contactSpread:0.95,harm:0.50,tint:0.18,grain:0.28}
 };
-document.querySelectorAll('.sw').forEach(b=>b.addEventListener('click',()=>{
-  const p=b.dataset.preset;
-  Object.assign(S, p==='reset'
-    ? {shadowDir:DEFAULTS.shadowDir,shadowLen:DEFAULTS.shadowLen,shadowSoft:DEFAULTS.shadowSoft,
-       shadowOp:DEFAULTS.shadowOp,contactOp:DEFAULTS.contactOp,contactSpread:DEFAULTS.contactSpread,
-       refl:DEFAULTS.refl,grain:DEFAULTS.grain,harm:DEFAULTS.harm,tint:DEFAULTS.tint,bright:0,warm:0,
-       sizeAdjust:1,keystone:0,rotate:0}
-    : PRESETS[p]);
-  syncUI(); rebuildProc(); paint();
+const FLOORS=[0.03,0.14,0.30];   // 霧面 / 一般 / 亮面
+
+function markChips(){
+  document.querySelectorAll('[data-scene]').forEach(b=>b.classList.toggle('on',b.dataset.scene===S.scene));
+  document.querySelectorAll('[data-floor]').forEach(b=>b.classList.toggle('on',+b.dataset.floor===S.floor));
+}
+function applyScene(name){
+  if(!SCENES[name]) return;
+  S.scene=name; Object.assign(S,SCENES[name]);
+  markChips(); syncUI(); rebuildProc(); paint();
+}
+document.querySelectorAll('[data-scene]').forEach(b=>
+  b.addEventListener('click',()=>applyScene(b.dataset.scene)));
+document.querySelectorAll('[data-floor]').forEach(b=>b.addEventListener('click',()=>{
+  S.floor=+b.dataset.floor; S.refl=FLOORS[S.floor];
+  markChips(); syncUI(); paint();
 }));
+
+/* 光源位置：存的是位置不是角度，所以商品移動時陰影方向會自己跟著轉 */
+function lightLabel(){
+  const el=$('light-src');
+  const on=!!S.lightPos;
+  el.textContent = on
+    ? '已設定光源位置。移動商品時，陰影方向會自動跟著調整。'
+    : '尚未設定，使用預設方向。點一下照片裡的窗戶或燈，陰影就會往反方向倒。';
+  el.style.color = on ? 'var(--ok)' : 'var(--ink-faint)';
+}
+function autoLight(){
+  if(!roomSmallData) return null;
+  const {data,w,h}=roomSmallData, n=w*h, L=new Float32Array(n);
+  for(let i=0;i<n;i++){
+    const j=i*4;
+    L[i]=0.299*data[j]+0.587*data[j+1]+0.114*data[j+2];
+  }
+  const thr=Float32Array.from(L).sort()[Math.floor(n*0.88)];   // 最亮的 12%
+  let sx=0,sy=0,c=0;
+  for(let y=0;y<h;y++) for(let x=0;x<w;x++)
+    if(L[y*w+x]>=thr){ sx+=x; sy+=y; c++; }
+  return c ? {x:sx/c/w, y:sy/c/h} : null;
+}
+function setLightMode(on){
+  S.lightMode=on;
+  const b=$('btn-light');
+  b.classList.toggle('on',on);
+  b.textContent = on ? '點選中… Esc 取消' : '在照片上點光源';
+  paint();
+}
+$('btn-light').addEventListener('click',()=>{
+  setLightMode(!S.lightMode);
+  if(S.lightMode) flash('在照片上點一下光源的位置 — 窗戶、燈具、或畫面裡最亮的地方。陰影會自動倒向反方向。');
+});
+$('btn-light-auto').addEventListener('click',()=>{
+  const p=autoLight();
+  if(!p){ flash('偵測不到光源，請用「在照片上點光源」手動指定。'); return; }
+  S.lightPos=p; lightLabel(); paint();
+  flash('已自動偵測：取照片最亮區域的重心當光源。位置不對的話改用手動點選。');
+});
+
+/* 進階 */
+$('btn-adv').addEventListener('click',e=>{
+  const a=$('adv'); a.hidden=!a.hidden;
+  e.currentTarget.classList.toggle('on',!a.hidden);
+  e.currentTarget.textContent = a.hidden ? '進階調整' : '收起進階調整';
+});
+$('btn-reset-adv').addEventListener('click',()=>{
+  applyScene(S.scene);
+  flash('已回到「'+$('[data-scene="'+S.scene+'"]').textContent+'」的預設值。');
+});
+// 手動動了這兩項就脫離預設，晶片取消高亮，才不會誤導
+$('c-shadowdir').addEventListener('input',()=>{ S.lightPos=null; lightLabel(); });
+$('c-refl').addEventListener('input',()=>{ S.floor=-1; markChips(); });
 
 function syncCamPresets(){
   document.querySelectorAll('[data-camh]').forEach(b=>
@@ -1479,7 +1607,13 @@ $('btn-export').addEventListener('click',()=>{
   $('sheet').hidden=false;
 });
 $('btn-close').addEventListener('click',()=>{ $('sheet').hidden=true; $('sheet-img').removeAttribute('src'); });
-document.addEventListener('keydown',e=>{ if(e.key==='Escape') $('sheet').hidden=true; });
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Escape') return;
+  $('sheet').hidden=true;
+  if(S.lightMode) setLightMode(false);
+  if(S.vpMode){ S.vpMode=false; $('btn-vp').classList.remove('on');
+    $('btn-vp').textContent='用消失點自動校正'; $('btn-vp-apply').hidden=true; paint(); }
+});
 
 /* ============================================================
    啟動：載入示範素材，工具一開就是可操作狀態
@@ -1492,6 +1626,8 @@ rebuildProc();
 refreshBadge();
 syncUI();
 syncCamPresets();
+markChips();
+lightLabel();
 paint();
 window.addEventListener('resize',paint);
 })();
