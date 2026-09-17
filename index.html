@@ -1,0 +1,1056 @@
+<title>空間合成工作台</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* 單一視覺主題：影像合成必須在中性暗底上判斷曝光與色調，
+   淺色底會讓使用者誤判合成圖的明暗。所有顏色均明確指定。 */
+:root{
+  --ground:#16181b;
+  --stage:#0e1012;
+  --panel:#1d2024;
+  --panel-2:#262a2f;
+  --panel-3:#2f343a;
+  --line:#343940;
+  --line-soft:#282c32;
+  --ink:#e7e9eb;
+  --ink-dim:#99a1a9;
+  --ink-faint:#6a727b;
+  --accent:#d4114a;
+  --accent-ink:#ff5c85;
+  --accent-soft:rgba(212,17,74,.14);
+  --ok:#54a97e;
+  --warn:#d9a13c;
+  --r:7px;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --sans:"Archivo","Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{
+  margin:0;background:var(--ground);color:var(--ink);
+  font-family:var(--sans);font-size:14px;line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3{margin:0;font-weight:600;text-wrap:balance}
+
+/* ---------- 版面 ---------- */
+.app{display:grid;grid-template-columns:minmax(0,1fr) 340px;height:100%}
+.stage-col{display:flex;flex-direction:column;min-width:0;overflow:hidden}
+.rail{
+  background:var(--panel);border-left:1px solid var(--line);
+  display:flex;flex-direction:column;min-width:0;overflow:hidden;
+}
+
+/* ---------- 頁首 ---------- */
+.top{
+  display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  padding:12px 20px;padding-block:12px;
+  border-bottom:1px solid var(--line-soft);background:var(--panel);
+}
+.mark{display:flex;align-items:baseline;gap:9px;min-width:0}
+.mark b{font-size:15px;font-weight:700;letter-spacing:-.01em}
+.mark span{font-size:11px;color:var(--ink-faint);letter-spacing:.09em;text-transform:uppercase;font-family:var(--mono)}
+.priv{
+  margin-left:auto;display:flex;align-items:center;gap:7px;
+  font-size:11.5px;color:var(--ink-dim);
+  background:var(--panel-2);border:1px solid var(--line);
+  border-radius:100px;padding:4px 11px 4px 9px;
+}
+.priv i{width:6px;height:6px;border-radius:50%;background:var(--ok);flex:none}
+
+/* ---------- 畫布舞台 ---------- */
+.stage{
+  flex:1;min-height:0;display:flex;align-items:center;justify-content:center;
+  background:var(--stage);padding:20px;padding-block:20px;
+  position:relative;
+  background-image:radial-gradient(ellipse at 50% 0%,#191c20 0%,#0e1012 70%);
+}
+#view{
+  max-width:100%;max-height:100%;
+  display:block;border-radius:3px;
+  box-shadow:0 18px 50px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.07);
+  touch-action:none;cursor:grab;
+}
+#view.dragging{cursor:grabbing}
+.demo-badge{
+  position:absolute;top:28px;left:28px;z-index:2;
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;
+  background:rgba(212,17,74,.16);color:var(--accent-ink);
+  border:1px solid rgba(212,17,74,.4);border-radius:4px;padding:3px 8px;
+}
+
+/* ---------- 狀態列 ---------- */
+.status{
+  display:flex;gap:0;flex-wrap:wrap;
+  border-top:1px solid var(--line-soft);background:var(--panel);
+}
+.stat{
+  flex:1 1 130px;min-width:0;padding:9px 18px;padding-block:9px;
+  border-right:1px solid var(--line-soft);
+}
+.stat:last-child{border-right:0}
+.stat dt{
+  font-size:10px;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--ink-faint);margin:0 0 2px;font-family:var(--mono);
+}
+.stat dd{margin:0;font-family:var(--mono);font-size:13.5px;font-variant-numeric:tabular-nums;color:var(--ink)}
+.stat dd.warn{color:var(--warn)}
+
+/* ---------- 控制列 ---------- */
+.rail-scroll{overflow-y:auto;padding:0 0 26px;flex:1}
+.step{border-bottom:1px solid var(--line-soft)}
+.step-hd{
+  display:flex;align-items:center;gap:10px;
+  padding:13px 18px 9px;padding-block:13px 9px;
+}
+.step-n{
+  flex:none;width:19px;height:19px;border-radius:50%;
+  display:grid;place-items:center;
+  font-family:var(--mono);font-size:10.5px;font-weight:600;
+  background:var(--panel-3);color:var(--ink-dim);
+}
+.step.on .step-n{background:var(--accent);color:#fff}
+.step-hd h3{font-size:12.5px;letter-spacing:.02em}
+.step-hd em{
+  margin-left:auto;font-style:normal;font-size:10.5px;
+  color:var(--ink-faint);font-family:var(--mono);
+}
+.step-body{padding:0 18px 15px;display:flex;flex-direction:column;gap:11px}
+
+.hint{font-size:11.5px;color:var(--ink-faint);line-height:1.5;margin:-2px 0 0}
+
+/* 控制元件 */
+.row{display:flex;align-items:center;gap:9px}
+.row.split{justify-content:space-between}
+label.fld{display:flex;flex-direction:column;gap:5px;flex:1;min-width:0}
+.fld-top{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.fld-top span{font-size:11.5px;color:var(--ink-dim)}
+.fld-top b{
+  font-family:var(--mono);font-size:11.5px;font-weight:500;
+  color:var(--ink);font-variant-numeric:tabular-nums;
+}
+input[type=range]{
+  -webkit-appearance:none;appearance:none;width:100%;height:16px;
+  background:transparent;margin:0;cursor:pointer;
+}
+input[type=range]::-webkit-slider-runnable-track{height:3px;border-radius:2px;background:var(--panel-3)}
+input[type=range]::-moz-range-track{height:3px;border-radius:2px;background:var(--panel-3)}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:13px;height:13px;border-radius:50%;
+  background:var(--ink);border:0;margin-top:-5px;
+}
+input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;background:var(--ink);border:0}
+input[type=range]:focus-visible::-webkit-slider-thumb{box-shadow:0 0 0 3px var(--accent-soft),0 0 0 1px var(--accent)}
+input[type=range]:focus-visible::-moz-range-thumb{box-shadow:0 0 0 3px var(--accent-soft),0 0 0 1px var(--accent)}
+
+input[type=number],select{
+  width:100%;background:var(--panel-2);color:var(--ink);
+  border:1px solid var(--line);border-radius:var(--r);
+  padding:7px 9px;font-family:var(--mono);font-size:13px;
+}
+select{font-family:var(--sans);font-size:12.5px}
+input[type=number]:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:transparent}
+
+.btn{
+  appearance:none;border:1px solid var(--line);background:var(--panel-2);
+  color:var(--ink);font-family:var(--sans);font-size:12.5px;font-weight:500;
+  padding:8px 12px;border-radius:var(--r);cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;
+}
+.btn:hover{background:var(--panel-3);border-color:#414750}
+.btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.btn.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent-ink)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+.btn.primary:hover{background:#e51b55;border-color:#e51b55}
+.btn.wide{width:100%}
+.btn.sm{padding:6px 10px;font-size:11.5px}
+
+.drop{
+  position:relative;
+  border:1px dashed var(--line);border-radius:var(--r);background:var(--panel-2);
+  padding:13px;text-align:center;cursor:pointer;display:block;
+}
+.drop:hover,.drop.over{border-color:var(--accent);background:var(--accent-soft)}
+.drop b{display:block;font-size:12.5px;font-weight:600}
+.drop span{display:block;font-size:11px;color:var(--ink-faint);margin-top:2px;font-family:var(--mono)}
+.drop input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.drop:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+
+.swatches{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.sw{
+  border:1px solid var(--line);background:var(--panel-2);border-radius:var(--r);
+  padding:6px 4px;font-size:10.5px;color:var(--ink-dim);cursor:pointer;
+  font-family:var(--mono);
+}
+.sw:hover{border-color:var(--accent);color:var(--accent-ink)}
+
+.rail-foot{
+  padding:14px 18px;padding-block:14px;border-top:1px solid var(--line);
+  display:flex;flex-direction:column;gap:8px;background:var(--panel);
+}
+
+/* ---------- 輸出覆蓋層 ---------- */
+.sheet{
+  position:fixed;inset:0;z-index:50;background:rgba(8,9,11,.93);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:14px;padding:22px;padding-block:22px;
+}
+.sheet img{
+  max-width:100%;max-height:70vh;border-radius:3px;
+  box-shadow:0 20px 60px rgba(0,0,0,.6);
+}
+.sheet p{margin:0;font-size:13px;color:var(--ink-dim);text-align:center;max-width:52ch}
+.sheet p b{color:var(--ink)}
+
+@media (max-width:860px){
+  html,body{height:auto}
+  .app{grid-template-columns:1fr;height:auto}
+  .stage-col,.rail{overflow:visible}
+  .stage{min-height:300px}
+  .rail{border-left:0;border-top:1px solid var(--line)}
+  .rail-scroll{overflow-y:visible}
+  .stage{padding:14px}
+  #view{max-height:52vh}
+  .demo-badge{top:20px;left:20px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<div class="app">
+  <div class="stage-col">
+    <header class="top">
+      <div class="mark"><b>空間合成工作台</b><span>LG Home Visualizer</span></div>
+      <div class="priv"><i></i>影像僅在本機處理，不會上傳</div>
+    </header>
+
+    <div class="stage">
+      <span class="demo-badge" id="demoBadge">示範素材</span>
+      <canvas id="view" aria-label="合成預覽畫布，可拖曳商品與視平線"></canvas>
+    </div>
+
+    <dl class="status">
+      <div class="stat"><dt>商品實際尺寸</dt><dd id="s-dim">—</dd></div>
+      <div class="stat"><dt>此位置比例尺</dt><dd id="s-scale">—</dd></div>
+      <div class="stat"><dt>畫面佔高</dt><dd id="s-px">—</dd></div>
+      <div class="stat"><dt>比例偏差</dt><dd id="s-dev">—</dd></div>
+    </dl>
+  </div>
+
+  <aside class="rail">
+    <div class="rail-scroll">
+
+      <section class="step on">
+        <div class="step-hd"><i class="step-n">1</i><h3>載入素材</h3></div>
+        <div class="step-body">
+          <label class="drop" id="dropRoom">
+            <b>客戶空間照片</b><span id="nameRoom">示範場景</span>
+            <input type="file" id="f-room" accept="image/*">
+          </label>
+          <label class="drop" id="dropProd">
+            <b>商品去背圖（PNG）</b><span id="nameProd">示範商品</span>
+            <input type="file" id="f-prod" accept="image/*">
+          </label>
+          <p class="hint">去背圖請用透明背景 PNG，長邊建議 1500px 以上；邊緣若殘留白邊，用第 5 階段的「邊緣修整」清除。</p>
+        </div>
+      </section>
+
+      <section class="step">
+        <div class="step-hd"><i class="step-n">2</i><h3>真實比例校正</h3><em>關鍵</em></div>
+        <div class="step-body">
+          <label class="fld">
+            <span style="font-size:11.5px;color:var(--ink-dim)">商品高度 · 依型錄實際尺寸</span>
+            <select id="p-preset">
+              <option value="">選擇常見品類（參考值，可自行修改）…</option>
+              <option value="170">直立式洗乾衣機 · 約 170 cm</option>
+              <option value="179">對開門冰箱 · 約 179 cm</option>
+              <option value="85">滾筒洗衣機 · 約 85 cm</option>
+              <option value="100">空氣清淨機 · 約 100 cm</option>
+              <option value="185">衣物護理機 · 約 185 cm</option>
+              <option value="60">除濕機 · 約 60 cm</option>
+            </select>
+          </label>
+          <div class="row">
+            <label class="fld">
+              <div class="fld-top"><span>實際高度</span><b>cm</b></div>
+              <input type="number" id="p-height" value="170" min="10" max="300" step="1">
+            </label>
+          </div>
+          <label class="fld">
+            <div class="fld-top"><span>拍照時的相機高度</span><b id="v-camh">150 cm</b></div>
+            <input type="range" id="c-camh" min="60" max="220" step="1" value="150">
+          </label>
+          <label class="fld">
+            <div class="fld-top"><span>視平線位置</span><b id="v-horizon">42%</b></div>
+            <input type="range" id="c-horizon" min="2" max="96" step="0.2" value="42">
+          </label>
+          <p class="hint">視平線＝拍照時鏡頭的水平高度。把畫面中的地磚縫或牆面橫線往遠處延伸，交會的高度就是它。校正正確後，把商品往深處拖會自動變小，比例永遠正確。</p>
+        </div>
+      </section>
+
+      <section class="step">
+        <div class="step-hd"><i class="step-n">3</i><h3>擺放與透視</h3></div>
+        <div class="step-body">
+          <p class="hint" style="margin-top:0">直接在畫面上拖曳商品；拖視平線可重新校正。</p>
+          <label class="fld">
+            <div class="fld-top"><span>尺寸微調</span><b id="v-size">100%</b></div>
+            <input type="range" id="c-size" min="50" max="180" step="1" value="100">
+          </label>
+          <label class="fld">
+            <div class="fld-top"><span>垂直透視（上窄下寬）</span><b id="v-keystone">0</b></div>
+            <input type="range" id="c-keystone" min="-14" max="14" step="0.5" value="0">
+          </label>
+          <button class="btn wide" id="btn-flip" type="button">水平鏡射</button>
+        </div>
+      </section>
+
+      <section class="step">
+        <div class="step-hd"><i class="step-n">4</i><h3>陰影與接地</h3><em>影響最大</em></div>
+        <div class="step-body">
+          <label class="fld">
+            <div class="fld-top"><span>接觸陰影濃度</span><b id="v-contactop">75%</b></div>
+            <input type="range" id="c-contactop" min="0" max="100" step="1" value="75">
+          </label>
+          <label class="fld">
+            <div class="fld-top"><span>接觸陰影範圍</span><b id="v-contactspread">100%</b></div>
+            <input type="range" id="c-contactspread" min="80" max="140" step="1" value="100">
+          </label>
+          <label class="fld">
+            <div class="fld-top"><span>光源方向</span><b id="v-shadowdir">205°</b></div>
+            <input type="range" id="c-shadowdir" min="0" max="360" step="1" value="205">
+          </label>
+          <label class="fld">
+            <div class="fld-top"><span>投射陰影長度</span><b id="v-shadowlen">55%</b></div>
+            <input type="range" id="c-shadowlen" min="0" max="160" step="1" value="55">
+          </label>
+          <label class="fld">
+            <div class="fld-top"><span>陰影柔和度</span><b id="v-shadowsoft">14</b></div>
+            <input type="range" id="c-shadowsoft" min="0" max="60" step="0.5" value="14">
+          </label>
+          <label class="fld">
+            <div class="fld-top"><span>投射陰影濃度</span><b id="v-shadowop">38%</b></div>
+            <input type="range" id="c-shadowop" min="0" max="100" step="1" value="38">
+          </label>
+          <label class="fld">
+            <div class="fld-top"><span>地板倒影（亮面地板適用）</span><b id="v-refl">14%</b></div>
+            <input type="range" id="c-refl" min="0" max="60" step="1" value="14">
+          </label>
+          <p class="hint">接觸陰影是「有沒有真的站在地上」最主要的視覺線索，缺了它其他調再多都沒用。先把它調到剛好，再處理投射陰影。</p>
+        </div>
+      </section>
+
+      <section class="step">
+        <div class="step-hd"><i class="step-n">5</i><h3>影像融合</h3></div>
+        <div class="step-body">
+          <label class="fld">
+            <div class="fld-top"><span>自動色調匹配</span><b id="v-harm">55%</b></div>
+            <input type="range" id="c-harm" min="0" max="100" step="1" value="55">
+          </label>
+          <label class="fld">
+            <div class="fld-top"><span>亮度</span><b id="v-bright">0</b></div>
+            <input type="range" id="c-bright" min="-45" max="45" step="1" value="0">
+          </label>
+          <label class="fld">
+            <div class="fld-top"><span>色溫</span><b id="v-warm">0</b></div>
+            <input type="range" id="c-warm" min="-45" max="45" step="1" value="0">
+          </label>
+          <label class="fld">
+            <div class="fld-top"><span>邊緣修整（去白邊）</span><b id="v-trim">1 px</b></div>
+            <input type="range" id="c-trim" min="0" max="5" step="1" value="1">
+          </label>
+          <label class="fld">
+            <div class="fld-top"><span>雜訊匹配</span><b id="v-grain">35%</b></div>
+            <input type="range" id="c-grain" min="0" max="100" step="1" value="35">
+          </label>
+          <p class="hint">色調匹配會取樣商品周圍的環境色，把去背圖的白平衡與黑階拉向照片。雜訊匹配讓過於乾淨的商品圖貼近照片本身的顆粒。</p>
+        </div>
+      </section>
+
+      <section class="step">
+        <div class="step-hd"><i class="step-n">6</i><h3>檢視與輸出</h3></div>
+        <div class="step-body">
+          <div class="swatches">
+            <button class="sw" data-preset="soft" type="button">柔和室內</button>
+            <button class="sw" data-preset="hard" type="button">強烈日光</button>
+            <button class="sw" data-preset="flat" type="button">陰天平光</button>
+            <button class="sw" data-preset="reset" type="button">重設</button>
+          </div>
+          <button class="btn wide" id="btn-compare" type="button">按住比對原圖</button>
+        </div>
+      </section>
+    </div>
+
+    <div class="rail-foot">
+      <button class="btn primary wide" id="btn-export" type="button">輸出合成圖（原始解析度）</button>
+    </div>
+  </aside>
+</div>
+
+<div class="sheet" id="sheet" hidden>
+  <img id="sheet-img" alt="合成結果，原始解析度">
+  <p id="sheet-msg"></p>
+  <div class="row">
+    <button class="btn" id="btn-dl" type="button" hidden>下載 PNG</button>
+    <button class="btn" id="btn-close" type="button">關閉</button>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+const $ = id => document.getElementById(id);
+const clamp = (v,a,b) => v<a?a:v>b?b:v;
+const lerp = (a,b,t) => a+(b-a)*t;
+
+/* ============================================================
+   狀態
+   ============================================================ */
+const S = {
+  productH:170, cameraH:150, horizonY:0.42,
+  baseX:0.52, baseY:0.86,
+  sizeAdjust:1, flip:false, keystone:0,
+  contactOp:0.75, contactSpread:1,
+  shadowDir:205, shadowLen:0.55, shadowSoft:14, shadowOp:0.38,
+  refl:0.14,
+  harm:0.55, bright:0, warm:0, trim:1, grain:0.35,
+  compare:false
+};
+const DEFAULTS = JSON.parse(JSON.stringify(S));
+
+let roomImg=null, prodImg=null;
+let roomSmall=null, roomSmallData=null;   // 取樣用縮圖
+let trimC=null, procC=null, silC=null, reflC=null;
+let usingDemoRoom=true, usingDemoProd=true;
+
+const view = $('view');
+const vctx = view.getContext('2d');
+
+/* ============================================================
+   小工具
+   ============================================================ */
+function cvs(w,h){ const c=document.createElement('canvas'); c.width=Math.max(1,Math.round(w)); c.height=Math.max(1,Math.round(h)); return c; }
+let _scratch=null;
+function scratch(w,h){
+  w=Math.max(1,Math.round(w)); h=Math.max(1,Math.round(h));
+  if(!_scratch) _scratch=cvs(w,h);
+  if(_scratch.width!==w||_scratch.height!==h){ _scratch.width=w; _scratch.height=h; }
+  else _scratch.getContext('2d').clearRect(0,0,w,h);
+  return _scratch;
+}
+const blurOK = (()=>{ const c=cvs(2,2).getContext('2d'); c.filter='blur(1px)'; return c.filter!=='none'; })();
+function setBlur(ctx,px){ ctx.filter = (blurOK && px>0.2) ? 'blur('+px.toFixed(2)+'px)' : 'none'; }
+
+const noiseTile = (function(){
+  const n=cvs(192,192), c=n.getContext('2d'), d=c.createImageData(192,192);
+  for(let i=0;i<d.data.length;i+=4){
+    const v=128+(Math.random()-0.5)*96;
+    d.data[i]=d.data[i+1]=d.data[i+2]=v; d.data[i+3]=255;
+  }
+  c.putImageData(d,0,0); return n;
+})();
+
+/* ============================================================
+   示範素材 — 讓工具一打開就是可操作狀態
+   ============================================================ */
+function demoRoom(){
+  const W=820,H=1150,c=cvs(W,H),x=c.getContext('2d');
+  const floorY=H*0.665;
+  // 牆：深色長條磚
+  const wg=x.createLinearGradient(0,0,W,floorY);
+  wg.addColorStop(0,'#33373b'); wg.addColorStop(.62,'#43484d'); wg.addColorStop(1,'#565b60');
+  x.fillStyle=wg; x.fillRect(0,0,W,floorY);
+  x.strokeStyle='rgba(20,22,25,.55)'; x.lineWidth=2;
+  for(let y=14;y<floorY;y+=26){ x.beginPath(); x.moveTo(0,y); x.lineTo(W,y); x.stroke(); }
+  x.lineWidth=1.4;
+  for(let r=0,y=14;y<floorY;y+=26,r++){
+    for(let px=(r%2?0:46);px<W;px+=92){ x.beginPath(); x.moveTo(px,y); x.lineTo(px,y+26); x.stroke(); }
+  }
+  // 窗
+  x.fillStyle='#22262a'; x.fillRect(46,H*0.20,300,H*0.20);
+  x.fillStyle='#b9ad97'; x.fillRect(58,H*0.21,276,H*0.18);
+  x.fillStyle='#22262a'; x.fillRect(188,H*0.20,12,H*0.20);
+  // 地板：透視地磚
+  const fg=x.createLinearGradient(0,floorY,W*0.8,H);
+  fg.addColorStop(0,'#8b8b86'); fg.addColorStop(.5,'#a3a29c'); fg.addColorStop(1,'#c2c0b8');
+  x.fillStyle=fg; x.fillRect(0,floorY,W,H-floorY);
+  x.strokeStyle='rgba(90,90,86,.5)'; x.lineWidth=1.6;
+  const vpX=W*0.46, vpY=H*0.40;
+  for(let i=-7;i<=14;i++){ const fx=i*130; x.beginPath(); x.moveTo(vpX,vpY); x.lineTo(fx,H); x.stroke(); }
+  for(let d=1;d<=9;d++){ const y=floorY+(H-floorY)*Math.pow(d/9,1.9); x.beginPath(); x.moveTo(0,y); x.lineTo(W,y); x.stroke(); }
+  // 右側光斑
+  const sp=x.createRadialGradient(W*0.78,H*0.93,10,W*0.78,H*0.93,W*0.55);
+  sp.addColorStop(0,'rgba(255,252,240,.30)'); sp.addColorStop(1,'rgba(255,252,240,0)');
+  x.fillStyle=sp; x.fillRect(0,floorY,W,H-floorY);
+  // 顆粒
+  const nd=x.getImageData(0,0,W,H);
+  for(let i=0;i<nd.data.length;i+=4){
+    const n=(Math.random()-0.5)*13;
+    nd.data[i]+=n; nd.data[i+1]+=n; nd.data[i+2]+=n;
+  }
+  x.putImageData(nd,0,0);
+  return c;
+}
+function demoProduct(){
+  const W=520,H=1470,c=cvs(W,H),x=c.getContext('2d');
+  const r=16;
+  function rr(a,b,w,h,rad){ x.beginPath(); x.moveTo(a+rad,b); x.arcTo(a+w,b,a+w,b+h,rad); x.arcTo(a+w,b+h,a,b+h,rad); x.arcTo(a,b+h,a,b,rad); x.arcTo(a,b,a+w,b,rad); x.closePath(); }
+  const g=x.createLinearGradient(0,0,W,0);
+  g.addColorStop(0,'#3c4045'); g.addColorStop(.42,'#5a5f65'); g.addColorStop(.72,'#6a7076'); g.addColorStop(1,'#42464b');
+  rr(0,0,W,H,r); x.fillStyle=g; x.fill();
+  // 上下門圈
+  [0.255,0.735].forEach((cy,i)=>{
+    const R=W*0.30, px=W*0.53, py=H*cy;
+    const rg=x.createRadialGradient(px-R*0.3,py-R*0.35,R*0.1,px,py,R);
+    rg.addColorStop(0,'#2a2d31'); rg.addColorStop(.75,'#17191c'); rg.addColorStop(1,'#101214');
+    x.beginPath(); x.arc(px,py,R,0,7); x.fillStyle=rg; x.fill();
+    const ig=x.createRadialGradient(px-R*0.25,py-R*0.3,R*0.05,px,py,R*0.72);
+    ig.addColorStop(0,'#5d646b'); ig.addColorStop(.6,'#2e3237'); ig.addColorStop(1,'#1b1e21');
+    x.beginPath(); x.arc(px,py,R*0.72,0,7); x.fillStyle=ig; x.fill();
+    x.beginPath(); x.arc(px,py,R*0.44,0,7); x.fillStyle=i?'#23262a':'#1e2125'; x.fill();
+    x.strokeStyle='rgba(255,255,255,.14)'; x.lineWidth=3;
+    x.beginPath(); x.arc(px,py,R*0.86,Math.PI*1.05,Math.PI*1.75); x.stroke();
+  });
+  // 控制面板帶
+  x.fillStyle='#16181b'; x.fillRect(0,H*0.475,W,H*0.055);
+  x.fillStyle='rgba(215,220,226,.55)';
+  for(let i=0;i<5;i++) x.fillRect(W*(0.22+i*0.12),H*0.498,16,4);
+  // 左側面板線條
+  x.strokeStyle='rgba(255,255,255,.07)'; x.lineWidth=5;
+  for(let i=0;i<3;i++){
+    const px=W*(0.09+i*0.085);
+    x.beginPath(); x.moveTo(px,H*0.06); x.lineTo(px,H*0.44); x.stroke();
+    x.beginPath(); x.moveTo(px,H*0.55); x.lineTo(px,H*0.94); x.stroke();
+  }
+  // 頂部高光
+  x.fillStyle='rgba(255,255,255,.10)'; rr(0,0,W,10,4); x.fill();
+  return c;
+}
+
+/* ============================================================
+   影像處理管線：原圖 →[邊緣修整]→ trimC →[色調]→ procC → silC / reflC
+   ============================================================ */
+function rebuildTrim(){
+  if(!prodImg) return;
+  const w=prodImg.width, h=prodImg.height;
+  trimC=cvs(w,h);
+  const c=trimC.getContext('2d');
+  c.drawImage(prodImg,0,0);
+  const r=S.trim|0;
+  if(r>0){
+    const d=c.getImageData(0,0,w,h), a=d.data;
+    // 可分離最小值濾波（腐蝕 alpha）→ 去除去背殘留的外框像素
+    const tmp=new Uint8ClampedArray(w*h);
+    for(let y=0;y<h;y++){
+      const o=y*w;
+      for(let x2=0;x2<w;x2++){
+        let m=255;
+        for(let k=-r;k<=r;k++){
+          const xx=x2+k; if(xx<0||xx>=w){ m=0; break; }
+          const v=a[(o+xx)*4+3]; if(v<m) m=v;
+        }
+        tmp[o+x2]=m;
+      }
+    }
+    for(let x2=0;x2<w;x2++){
+      for(let y=0;y<h;y++){
+        let m=255;
+        for(let k=-r;k<=r;k++){
+          const yy=y+k; if(yy<0||yy>=h){ m=0; break; }
+          const v=tmp[yy*w+x2]; if(v<m) m=v;
+        }
+        a[(y*w+x2)*4+3]=m;
+      }
+    }
+    c.putImageData(d,0,0);
+  }
+}
+
+function regionStats(){
+  // 取樣商品即將落點周圍的環境色，而非整張照片 —— 暗角裡的商品該偏暗
+  if(!roomSmallData) return null;
+  const {data,w,h}=roomSmallData;
+  const g=geom(1);
+  const cx=(S.baseX)*w, cy=(S.baseY-((g.drawH/g.H)*0.5))*h;
+  const rad=Math.max(6, Math.round(w*0.34));
+  const x0=clamp(Math.round(cx-rad),0,w-1), x1=clamp(Math.round(cx+rad),0,w-1);
+  const y0=clamp(Math.round(cy-rad),0,h-1), y1=clamp(Math.round(cy+rad),0,h-1);
+  let n=0, s=[0,0,0], q=[0,0,0];
+  for(let y=y0;y<=y1;y++) for(let x=x0;x<=x1;x++){
+    const i=(y*w+x)*4;
+    for(let c=0;c<3;c++){ const v=data[i+c]; s[c]+=v; q[c]+=v*v; }
+    n++;
+  }
+  if(!n) return null;
+  const mean=s.map(v=>v/n);
+  const std=q.map((v,c)=>Math.sqrt(Math.max(1,v/n-mean[c]*mean[c])));
+  return {mean,std};
+}
+
+function rebuildProc(){
+  if(!trimC) return;
+  const w=trimC.width, h=trimC.height;
+  procC=cvs(w,h);
+  const c=procC.getContext('2d');
+  c.drawImage(trimC,0,0);
+
+  const d=c.getImageData(0,0,w,h), a=d.data;
+  // 商品本身的統計（只算不透明像素）
+  let n=0,s=[0,0,0],q=[0,0,0];
+  for(let i=0;i<a.length;i+=4){
+    if(a[i+3]<140) continue;
+    for(let k=0;k<3;k++){ const v=a[i+k]; s[k]+=v; q[k]+=v*v; }
+    n++;
+  }
+  const room=regionStats();
+  let mean=[128,128,128], std=[50,50,50], gain=[1,1,1], off=[0,0,0];
+  if(n>0){
+    mean=s.map(v=>v/n);
+    std=q.map((v,k)=>Math.sqrt(Math.max(1,v/n-mean[k]*mean[k])));
+  }
+  if(room && n>0 && S.harm>0){
+    for(let k=0;k<3;k++){
+      const target=lerp(mean[k], room.mean[k], S.harm*0.72);
+      const ratio=clamp(room.std[k]/std[k],0.72,1.35);
+      gain[k]=lerp(1, ratio, S.harm*0.55);
+      off[k]=target-mean[k]*gain[k];
+    }
+  }
+  const b=S.bright, wm=S.warm;
+  const addR=b+wm*0.75, addG=b, addB=b-wm*0.85;
+  if(S.harm>0 || b!==0 || wm!==0){
+    for(let i=0;i<a.length;i+=4){
+      if(a[i+3]===0) continue;
+      a[i]  =clamp(a[i]  *gain[0]+off[0]+addR,0,255);
+      a[i+1]=clamp(a[i+1]*gain[1]+off[1]+addG,0,255);
+      a[i+2]=clamp(a[i+2]*gain[2]+off[2]+addB,0,255);
+    }
+    c.putImageData(d,0,0);
+  }
+
+  // 黑色剪影（投射／接觸陰影用）
+  silC=cvs(w,h);
+  const sc=silC.getContext('2d');
+  sc.drawImage(procC,0,0);
+  sc.globalCompositeOperation='source-in';
+  sc.fillStyle='#000'; sc.fillRect(0,0,w,h);
+
+  // 地板倒影：垂直翻轉 + 由下往上淡出
+  reflC=cvs(w,h);
+  const rc=reflC.getContext('2d');
+  rc.translate(0,h); rc.scale(1,-1); rc.drawImage(procC,0,0);
+  rc.setTransform(1,0,0,1,0,0);
+  rc.globalCompositeOperation='destination-out';
+  const gr=rc.createLinearGradient(0,0,0,h);
+  gr.addColorStop(0,'rgba(0,0,0,0.30)');
+  gr.addColorStop(0.45,'rgba(0,0,0,0.92)');
+  gr.addColorStop(1,'rgba(0,0,0,1)');
+  rc.fillStyle=gr; rc.fillRect(0,0,w,h);
+}
+
+/* ============================================================
+   幾何：單視圖測量學
+   立於地面的物體，其畫面高度 = (底部y − 視平線y) × 實際高 / 相機高
+   ============================================================ */
+function geom(k){
+  const W=roomImg.width*k, H=roomImg.height*k;
+  const horizonY=S.horizonY*H;
+  const baseY=S.baseY*H, baseX=S.baseX*W;
+  const denom=Math.max(baseY-horizonY, H*0.015);
+  const pxPerCm=denom/S.cameraH;
+  const drawH=denom*(S.productH/S.cameraH)*S.sizeAdjust;
+  const ar=prodImg ? prodImg.width/prodImg.height : 0.4;
+  return {W,H,k,horizonY,baseX,baseY,drawH,drawW:drawH*ar,pxPerCm,ar};
+}
+
+/* ============================================================
+   繪製
+   ============================================================ */
+function drawShape(ctx,src,cx,by,w,h,keystone,flip){
+  ctx.save();
+  if(flip){ ctx.translate(cx,0); ctx.scale(-1,1); ctx.translate(-cx,0); }
+  if(Math.abs(keystone)<0.004){
+    ctx.drawImage(src,cx-w/2,by-h,w,h);
+  }else{
+    const N=170, sh=src.height/N, dh=h/N;
+    for(let i=0;i<N;i++){
+      const t=(i+0.5)/N;                   // 0=頂 1=底
+      const ww=w*(1-keystone*(1-t));
+      ctx.drawImage(src, 0, i*sh, src.width, sh+0.6, cx-ww/2, by-h+i*dh, ww, dh+0.7);
+    }
+  }
+  ctx.restore();
+}
+
+function render(ctx,k){
+  const g=geom(k);
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.clearRect(0,0,g.W,g.H);
+  ctx.globalCompositeOperation='source-over';
+  ctx.globalAlpha=1; ctx.filter='none';
+  ctx.drawImage(roomImg,0,0,g.W,g.H);
+  if(S.compare || !procC) return g;
+
+  // — 地板倒影 —
+  if(S.refl>0.005){
+    ctx.save();
+    ctx.globalAlpha=S.refl;
+    setBlur(ctx, g.drawH*0.0022);
+    ctx.drawImage(reflC, g.baseX-g.drawW/2, g.baseY, g.drawW, g.drawH*0.42);
+    ctx.restore();
+  }
+
+  // — 投射陰影：把立面剪影投影到地面（傾斜＋壓縮） —
+  if(S.shadowOp>0.005 && S.shadowLen>0.005){
+    const a=S.shadowDir*Math.PI/180;
+    const sx=Math.cos(a)*S.shadowLen;
+    const sy=Math.sin(a)*S.shadowLen*0.5;
+    ctx.save();
+    ctx.globalAlpha=S.shadowOp;
+    setBlur(ctx, S.shadowSoft*(g.drawH/900)*2.2);
+    // x' = x − sx·(y−by)   y' = by + sy·(by−y)
+    ctx.transform(1, 0, -sx, -sy, sx*g.baseY, g.baseY*(1+sy));
+    drawShape(ctx,silC,g.baseX,g.baseY,g.drawW,g.drawH,S.keystone,S.flip);
+    ctx.restore();
+  }
+
+  // — 接觸陰影：壓扁的足跡，兩層（外散＋核心） —
+  if(S.contactOp>0.005){
+    const w=g.drawW*S.contactSpread;
+    ctx.save();
+    ctx.globalAlpha=S.contactOp*0.55;
+    setBlur(ctx, g.drawH*0.020);
+    ctx.drawImage(silC, g.baseX-w*0.55, g.baseY-g.drawH*0.070, w*1.10, g.drawH*0.085);
+    ctx.globalAlpha=S.contactOp*0.92;
+    setBlur(ctx, g.drawH*0.006);
+    ctx.drawImage(silC, g.baseX-w*0.5, g.baseY-g.drawH*0.024, w, g.drawH*0.030);
+    ctx.restore();
+  }
+
+  // — 商品 —
+  ctx.save();
+  ctx.filter='none'; ctx.globalAlpha=1;
+  drawShape(ctx,procC,g.baseX,g.baseY,g.drawW,g.drawH,S.keystone,S.flip);
+  ctx.restore();
+
+  // — 雜訊匹配（只疊在商品上） —
+  if(S.grain>0.005 && g.drawW>3 && g.drawH>3){
+    const w=Math.min(3000,Math.ceil(g.drawW)), h=Math.min(3000,Math.ceil(g.drawH));
+    const t=scratch(w,h), tc=t.getContext('2d');
+    tc.globalCompositeOperation='source-over';
+    tc.fillStyle=tc.createPattern(noiseTile,'repeat');
+    tc.fillRect(0,0,w,h);
+    tc.globalCompositeOperation='destination-in';
+    tc.drawImage(procC,0,0,w,h);
+    ctx.save();
+    ctx.globalAlpha=S.grain*0.42;
+    ctx.globalCompositeOperation='overlay';
+    ctx.drawImage(t, g.baseX-g.drawW/2, g.baseY-g.drawH, g.drawW, g.drawH);
+    ctx.restore();
+  }
+  ctx.globalCompositeOperation='source-over';
+  return g;
+}
+
+function drawGuides(ctx,g){
+  ctx.save();
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.filter='none'; ctx.globalAlpha=1;
+  const y=g.horizonY;
+  ctx.strokeStyle='rgba(212,17,74,.85)'; ctx.lineWidth=Math.max(1,g.H*0.0016);
+  ctx.setLineDash([g.W*0.016,g.W*0.012]);
+  ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(g.W,y); ctx.stroke();
+  ctx.setLineDash([]);
+  const pad=g.W*0.014, fs=Math.max(11,g.H*0.016);
+  ctx.font='600 '+fs+'px "IBM Plex Mono",monospace';
+  const label='視平線 · 相機高 '+S.cameraH+'cm';
+  const tw=ctx.measureText(label).width;
+  ctx.fillStyle='rgba(212,17,74,.92)';
+  ctx.fillRect(pad,y-fs*1.5,tw+pad*1.2,fs*1.55);
+  ctx.fillStyle='#fff'; ctx.textBaseline='middle';
+  ctx.fillText(label,pad+pad*0.6,y-fs*0.72);
+  ctx.restore();
+}
+
+/* ============================================================
+   預覽輸出
+   ============================================================ */
+let raf=0;
+function paint(){
+  if(raf) return;
+  raf=requestAnimationFrame(()=>{
+    raf=0;
+    if(!roomImg) return;
+    const k=Math.min(1, 1400/Math.max(roomImg.width,roomImg.height));
+    const W=Math.round(roomImg.width*k), H=Math.round(roomImg.height*k);
+    if(view.width!==W||view.height!==H){ view.width=W; view.height=H; }
+    const g=render(vctx,k);
+    if(!S.compare) drawGuides(vctx,g);
+    updateStatus(g);
+  });
+}
+
+function updateStatus(g){
+  const wcm=S.productH*g.ar;
+  $('s-dim').textContent = Math.round(S.productH)+' × '+Math.round(wcm)+' cm';
+  $('s-scale').textContent = (g.pxPerCm/g.k).toFixed(2)+' px / cm';
+  $('s-px').textContent = Math.round(g.drawH/g.k)+' px（'+Math.round(g.drawH/g.H*100)+'% 畫面高）';
+  const dev=Math.round((S.sizeAdjust-1)*100);
+  const el=$('s-dev');
+  el.textContent = dev===0 ? '符合真實比例' : (dev>0?'+':'')+dev+'%';
+  el.className = Math.abs(dev)>8 ? 'warn' : '';
+}
+
+/* ============================================================
+   互動
+   ============================================================ */
+let drag=null;
+function viewPos(e){
+  const r=view.getBoundingClientRect();
+  return { x:(e.clientX-r.left)/r.width, y:(e.clientY-r.top)/r.height };
+}
+view.addEventListener('pointerdown',e=>{
+  if(!roomImg||!prodImg) return;
+  const p=viewPos(e);
+  const g=geom(1);
+  const hy=S.horizonY;
+  if(Math.abs(p.y-hy) < 0.018){
+    drag={type:'horizon'};
+  }else{
+    const halfW=(g.drawW/g.W)/2, hh=g.drawH/g.H;
+    if(p.x>S.baseX-halfW-0.02 && p.x<S.baseX+halfW+0.02 && p.y>S.baseY-hh-0.01 && p.y<S.baseY+0.03){
+      drag={type:'prod', dx:p.x-S.baseX, dy:p.y-S.baseY};
+    }
+  }
+  if(drag){ view.setPointerCapture(e.pointerId); view.classList.add('dragging'); e.preventDefault(); }
+});
+view.addEventListener('pointermove',e=>{
+  if(!drag) return;
+  const p=viewPos(e);
+  if(drag.type==='horizon'){
+    S.horizonY=clamp(p.y,0.02,0.96);
+    $('c-horizon').value=(S.horizonY*100).toFixed(1);
+    $('v-horizon').textContent=Math.round(S.horizonY*100)+'%';
+  }else{
+    S.baseX=clamp(p.x-drag.dx,-0.1,1.1);
+    S.baseY=clamp(p.y-drag.dy, S.horizonY+0.012, 1.25);
+  }
+  paint();
+});
+function endDrag(e){
+  if(!drag) return;
+  drag=null; view.classList.remove('dragging');
+  try{ view.releasePointerCapture(e.pointerId); }catch(_){}
+  if(S.harm>0){ rebuildProc(); paint(); }   // 落點改變 → 重新取樣環境色
+}
+view.addEventListener('pointerup',endDrag);
+view.addEventListener('pointercancel',endDrag);
+
+view.tabIndex=0;
+view.addEventListener('keydown',e=>{
+  const step=e.shiftKey?0.02:0.004;
+  const map={ArrowLeft:[-step,0],ArrowRight:[step,0],ArrowUp:[0,-step],ArrowDown:[0,step]};
+  if(!map[e.key]) return;
+  e.preventDefault();
+  S.baseX=clamp(S.baseX+map[e.key][0],-0.1,1.1);
+  S.baseY=clamp(S.baseY+map[e.key][1],S.horizonY+0.012,1.25);
+  paint();
+});
+
+/* ============================================================
+   控制項接線
+   ============================================================ */
+const BIND=[
+  ['c-camh','v-camh', v=>{S.cameraH=v;}, v=>v+' cm', 'proc'],
+  ['c-horizon','v-horizon', v=>{S.horizonY=v/100;}, v=>Math.round(v)+'%', 'proc'],
+  ['c-size','v-size', v=>{S.sizeAdjust=v/100;}, v=>Math.round(v)+'%', 'proc'],
+  ['c-keystone','v-keystone', v=>{S.keystone=v/100;}, v=>v.toFixed(1), ''],
+  ['c-contactop','v-contactop', v=>{S.contactOp=v/100;}, fmtPct2, ''],
+  ['c-contactspread','v-contactspread', v=>{S.contactSpread=v/100;}, fmtPct2, ''],
+  ['c-shadowdir','v-shadowdir', v=>{S.shadowDir=v;}, v=>Math.round(v)+'°', ''],
+  ['c-shadowlen','v-shadowlen', v=>{S.shadowLen=v/100;}, fmtPct2, ''],
+  ['c-shadowsoft','v-shadowsoft', v=>{S.shadowSoft=v;}, v=>v.toFixed(1), ''],
+  ['c-shadowop','v-shadowop', v=>{S.shadowOp=v/100;}, fmtPct2, ''],
+  ['c-refl','v-refl', v=>{S.refl=v/100;}, fmtPct2, ''],
+  ['c-harm','v-harm', v=>{S.harm=v/100;}, fmtPct2, 'proc'],
+  ['c-bright','v-bright', v=>{S.bright=v;}, v=>(v>0?'+':'')+v, 'proc'],
+  ['c-warm','v-warm', v=>{S.warm=v;}, v=>(v>0?'+':'')+v, 'proc'],
+  ['c-trim','v-trim', v=>{S.trim=v;}, v=>v+' px', 'trim'],
+  ['c-grain','v-grain', v=>{S.grain=v/100;}, fmtPct2, '']
+];
+function fmtPct2(v){ return Math.round(v)+'%'; }
+
+let procTimer=0;
+function scheduleProc(kind){
+  clearTimeout(procTimer);
+  procTimer=setTimeout(()=>{
+    if(kind==='trim') rebuildTrim();
+    rebuildProc(); paint();
+  }, kind==='trim'?140:70);
+}
+BIND.forEach(([id,out,set,fmt,kind])=>{
+  const el=$(id);
+  el.addEventListener('input',()=>{
+    const v=parseFloat(el.value);
+    set(v);
+    $(out).textContent=fmt(v);
+    if(kind) scheduleProc(kind);
+    paint();
+  });
+});
+
+$('p-height').addEventListener('input',e=>{
+  const v=parseFloat(e.target.value);
+  if(isFinite(v)&&v>0){ S.productH=v; paint(); }
+});
+$('p-preset').addEventListener('change',e=>{
+  if(!e.target.value) return;
+  S.productH=parseFloat(e.target.value);
+  $('p-height').value=S.productH;
+  paint();
+});
+$('btn-flip').addEventListener('click',e=>{
+  S.flip=!S.flip;
+  e.currentTarget.classList.toggle('on',S.flip);
+  paint();
+});
+
+const cmp=$('btn-compare');
+function setCmp(on){ S.compare=on; cmp.classList.toggle('on',on); paint(); }
+['pointerdown'].forEach(t=>cmp.addEventListener(t,()=>setCmp(true)));
+['pointerup','pointerleave','pointercancel'].forEach(t=>cmp.addEventListener(t,()=>setCmp(false)));
+cmp.addEventListener('keydown',e=>{ if(e.key===' '||e.key==='Enter'){e.preventDefault();setCmp(!S.compare);} });
+
+/* 光影情境預設 */
+const PRESETS={
+  soft:{shadowDir:205,shadowLen:0.42,shadowSoft:26,shadowOp:0.28,contactOp:0.72,refl:0.12,grain:0.35},
+  hard:{shadowDir:212,shadowLen:0.95,shadowSoft:7,shadowOp:0.52,contactOp:0.88,refl:0.22,grain:0.30},
+  flat:{shadowDir:200,shadowLen:0.22,shadowSoft:38,shadowOp:0.20,contactOp:0.62,refl:0.06,grain:0.40}
+};
+document.querySelectorAll('.sw').forEach(b=>b.addEventListener('click',()=>{
+  const p=b.dataset.preset;
+  Object.assign(S, p==='reset'
+    ? {shadowDir:DEFAULTS.shadowDir,shadowLen:DEFAULTS.shadowLen,shadowSoft:DEFAULTS.shadowSoft,
+       shadowOp:DEFAULTS.shadowOp,contactOp:DEFAULTS.contactOp,contactSpread:DEFAULTS.contactSpread,
+       refl:DEFAULTS.refl,grain:DEFAULTS.grain,harm:DEFAULTS.harm,bright:0,warm:0,
+       sizeAdjust:1,keystone:0}
+    : PRESETS[p]);
+  syncUI(); rebuildProc(); paint();
+}));
+
+function syncUI(){
+  const set=(id,val,out,fmt)=>{ $(id).value=val; $(out).textContent=fmt; };
+  set('c-camh',S.cameraH,'v-camh',S.cameraH+' cm');
+  set('c-horizon',(S.horizonY*100).toFixed(1),'v-horizon',Math.round(S.horizonY*100)+'%');
+  set('c-size',Math.round(S.sizeAdjust*100),'v-size',Math.round(S.sizeAdjust*100)+'%');
+  set('c-keystone',(S.keystone*100).toFixed(1),'v-keystone',(S.keystone*100).toFixed(1));
+  set('c-contactop',Math.round(S.contactOp*100),'v-contactop',Math.round(S.contactOp*100)+'%');
+  set('c-contactspread',Math.round(S.contactSpread*100),'v-contactspread',Math.round(S.contactSpread*100)+'%');
+  set('c-shadowdir',S.shadowDir,'v-shadowdir',Math.round(S.shadowDir)+'°');
+  set('c-shadowlen',Math.round(S.shadowLen*100),'v-shadowlen',Math.round(S.shadowLen*100)+'%');
+  set('c-shadowsoft',S.shadowSoft,'v-shadowsoft',S.shadowSoft.toFixed(1));
+  set('c-shadowop',Math.round(S.shadowOp*100),'v-shadowop',Math.round(S.shadowOp*100)+'%');
+  set('c-refl',Math.round(S.refl*100),'v-refl',Math.round(S.refl*100)+'%');
+  set('c-harm',Math.round(S.harm*100),'v-harm',Math.round(S.harm*100)+'%');
+  set('c-bright',S.bright,'v-bright',(S.bright>0?'+':'')+S.bright);
+  set('c-warm',S.warm,'v-warm',(S.warm>0?'+':'')+S.warm);
+  set('c-grain',Math.round(S.grain*100),'v-grain',Math.round(S.grain*100)+'%');
+}
+
+/* ============================================================
+   檔案載入
+   ============================================================ */
+function readFile(file){
+  return new Promise((res,rej)=>{
+    const url=URL.createObjectURL(file);
+    const im=new Image();
+    im.onload=()=>{ res(im); };
+    im.onerror=()=>{ URL.revokeObjectURL(url); rej(new Error('無法讀取此影像')); };
+    im.src=url;
+  });
+}
+function buildRoomSmall(){
+  const sw=220, sh=Math.max(1,Math.round(roomImg.height/roomImg.width*sw));
+  roomSmall=cvs(sw,sh);
+  const c=roomSmall.getContext('2d');
+  c.drawImage(roomImg,0,0,sw,sh);
+  const d=c.getImageData(0,0,sw,sh);
+  roomSmallData={data:d.data,w:sw,h:sh};
+}
+async function loadRoom(file){
+  const im=await readFile(file);
+  roomImg=im; usingDemoRoom=false;
+  $('nameRoom').textContent=file.name;
+  buildRoomSmall(); rebuildProc(); refreshBadge(); paint();
+}
+async function loadProd(file){
+  const im=await readFile(file);
+  prodImg=im; usingDemoProd=false;
+  $('nameProd').textContent=file.name;
+  rebuildTrim(); rebuildProc(); refreshBadge(); paint();
+}
+function refreshBadge(){
+  const b=$('demoBadge');
+  b.hidden = !usingDemoRoom && !usingDemoProd;
+  if(usingDemoRoom&&usingDemoProd) b.textContent='示範素材';
+  else if(usingDemoRoom) b.textContent='示範場景 · 請上傳客戶照片';
+  else if(usingDemoProd) b.textContent='示範商品 · 請上傳去背圖';
+}
+function wireDrop(wrapId,inputId,handler){
+  const wrap=$(wrapId), input=$(inputId);
+  input.addEventListener('change',e=>{
+    const f=e.target.files&&e.target.files[0];
+    if(f) handler(f).catch(err=>alert(err.message));
+  });
+  ['dragenter','dragover'].forEach(t=>wrap.addEventListener(t,e=>{e.preventDefault();wrap.classList.add('over');}));
+  ['dragleave','drop'].forEach(t=>wrap.addEventListener(t,e=>{e.preventDefault();wrap.classList.remove('over');}));
+  wrap.addEventListener('drop',e=>{
+    const f=e.dataTransfer.files&&e.dataTransfer.files[0];
+    if(f) handler(f).catch(err=>alert(err.message));
+  });
+}
+wireDrop('dropRoom','f-room',loadRoom);
+wireDrop('dropProd','f-prod',loadProd);
+
+/* ============================================================
+   輸出
+   ============================================================ */
+const inFrame = (()=>{ try{ return window.self!==window.top; }catch(_){ return true; } })();
+$('btn-export').addEventListener('click',()=>{
+  if(!roomImg||!prodImg) return;
+  const out=cvs(roomImg.width,roomImg.height);
+  const oc=out.getContext('2d');
+  const wasCompare=S.compare; S.compare=false;
+  render(oc,1);
+  S.compare=wasCompare;
+  const url=out.toDataURL('image/png');
+  $('sheet-img').src=url;
+  $('sheet-msg').innerHTML = inFrame
+    ? '在圖片上<b>按右鍵 → 另存圖片</b>（手機請長按）即可儲存原始解析度的合成圖。'
+    : '合成圖已產生（'+roomImg.width+'×'+roomImg.height+'）。可直接下載，或在圖片上按右鍵另存。';
+  const dl=$('btn-dl');
+  dl.hidden=inFrame;
+  dl.onclick=()=>{
+    const a=document.createElement('a');
+    a.href=url; a.download='lg-visualizer-'+Date.now()+'.png';
+    document.body.appendChild(a); a.click(); a.remove();
+  };
+  $('sheet').hidden=false;
+});
+$('btn-close').addEventListener('click',()=>{ $('sheet').hidden=true; $('sheet-img').removeAttribute('src'); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') $('sheet').hidden=true; });
+
+/* ============================================================
+   啟動：載入示範素材，工具一開就是可操作狀態
+   ============================================================ */
+roomImg=demoRoom();
+prodImg=demoProduct();
+buildRoomSmall();
+rebuildTrim();
+rebuildProc();
+refreshBadge();
+syncUI();
+paint();
+window.addEventListener('resize',paint);
+})();
+</script>
