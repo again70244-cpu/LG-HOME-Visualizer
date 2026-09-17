@@ -74,6 +74,13 @@ h1,h2,h3{margin:0;font-weight:600;text-wrap:balance}
   touch-action:none;cursor:grab;
 }
 #view.dragging{cursor:grabbing}
+.flash{
+  position:absolute;left:20px;right:20px;bottom:18px;z-index:3;
+  background:rgba(30,34,39,.96);border:1px solid var(--accent);
+  border-left-width:3px;border-radius:var(--r);
+  padding:10px 13px;font-size:12.5px;line-height:1.5;color:var(--ink);
+  box-shadow:0 10px 30px rgba(0,0,0,.5);
+}
 .demo-badge{
   position:absolute;top:28px;left:28px;z-index:2;
   font-family:var(--mono);font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;
@@ -228,6 +235,7 @@ input[type=number]:focus,select:focus{outline:2px solid var(--accent);outline-of
     <div class="stage">
       <span class="demo-badge" id="demoBadge">示範素材</span>
       <canvas id="view" aria-label="合成預覽畫布，可拖曳商品與視平線"></canvas>
+      <div class="flash" id="flash" role="status" hidden></div>
     </div>
 
     <dl class="status">
@@ -235,6 +243,7 @@ input[type=number]:focus,select:focus{outline:2px solid var(--accent);outline-of
       <div class="stat"><dt>此位置比例尺</dt><dd id="s-scale">—</dd></div>
       <div class="stat"><dt>畫面佔高</dt><dd id="s-px">—</dd></div>
       <div class="stat"><dt>比例偏差</dt><dd id="s-dev">—</dd></div>
+          <div class="stat"><dt>牆面基準</dt><dd id="s-room">未校正</dd></div>
     </dl>
   </div>
 
@@ -290,10 +299,17 @@ input[type=number]:focus,select:focus{outline:2px solid var(--accent);outline-of
             <input type="range" id="c-horizon" min="2" max="96" step="0.2" value="42">
           </label>
           <label class="fld">
-            <div class="fld-top"><span>鏡頭視角</span><b id="v-fov">69°</b></div>
-            <input type="range" id="c-fov" min="28" max="105" step="1" value="69">
+            <div class="fld-top"><span>鏡頭視角</span><b id="v-fov">75°</b></div>
+            <input type="range" id="c-fov" min="28" max="110" step="1" value="75">
           </label>
-          <p class="hint">視平線＝拍照時鏡頭的水平高度。把畫面中的地磚縫或牆面橫線往遠處延伸，交會的高度就是它。校正正確後，把商品往深處拖會自動變小，比例永遠正確。</p>
+          <div class="swatches" style="grid-template-columns:repeat(3,1fr)">
+            <button class="sw" data-fov="104" type="button">手機超廣角</button>
+            <button class="sw" data-fov="75" type="button">手機主鏡</button>
+            <button class="sw" data-fov="48" type="button">相機標準</button>
+          </div>
+          <button class="btn wide" id="btn-vp" type="button">用消失點自動校正</button>
+          <button class="btn wide" id="btn-vp-apply" type="button" hidden>套用消失點</button>
+          <p class="hint">視平線＝拍照時鏡頭的水平高度，設錯會讓商品整個放大或縮小。<b style="color:var(--ink-dim)">建議用消失點自動校正</b>：在照片上拉兩條沿著地面的線（例如左邊牆腳線、右邊女兒牆底線），交點會同時算出正確的視平線，以及房間的牆面方向 — 轉向角會改成相對牆面，就不會轉錯邊。</p>
         </div>
       </section>
 
@@ -302,7 +318,7 @@ input[type=number]:focus,select:focus{outline:2px solid var(--accent);outline-of
         <div class="step-body">
           <p class="hint" style="margin-top:0">直接在畫面上拖曳商品；拖視平線可重新校正。</p>
           <label class="fld">
-            <div class="fld-top"><span>水平轉向</span><b id="v-rotate">0°</b></div>
+            <div class="fld-top"><span>水平轉向 · 相對牆面</span><b id="v-rotate">0°</b></div>
             <input type="range" id="c-rotate" min="-72" max="72" step="0.5" value="0">
           </label>
           <label class="fld">
@@ -361,8 +377,12 @@ input[type=number]:focus,select:focus{outline:2px solid var(--accent);outline-of
         <div class="step-hd"><i class="step-n">5</i><h3>影像融合</h3></div>
         <div class="step-body">
           <label class="fld">
-            <div class="fld-top"><span>自動色調匹配</span><b id="v-harm">55%</b></div>
+            <div class="fld-top"><span>曝光匹配</span><b id="v-harm">55%</b></div>
             <input type="range" id="c-harm" min="0" max="100" step="1" value="55">
+          </label>
+          <label class="fld">
+            <div class="fld-top"><span>環境染色</span><b id="v-tint">22%</b></div>
+            <input type="range" id="c-tint" min="0" max="100" step="1" value="22">
           </label>
           <label class="fld">
             <div class="fld-top"><span>亮度</span><b id="v-bright">0</b></div>
@@ -380,7 +400,7 @@ input[type=number]:focus,select:focus{outline:2px solid var(--accent);outline-of
             <div class="fld-top"><span>雜訊匹配</span><b id="v-grain">35%</b></div>
             <input type="range" id="c-grain" min="0" max="100" step="1" value="35">
           </label>
-          <p class="hint">色調匹配會取樣商品周圍的環境色，把去背圖的白平衡與黑階拉向照片。雜訊匹配讓過於乾淨的商品圖貼近照片本身的顆粒。</p>
+          <p class="hint">曝光匹配只調亮度、黑階與對比，中性色會保持中性 — 銀色機身不會被暖色地板染成米黃。環境染色是另外的小幅度色偏（有上限），需要更融入環境時再往上加。</p>
         </div>
       </section>
 
@@ -427,11 +447,13 @@ const S = {
   productH:170, cameraH:150, horizonY:0.42,
   baseX:0.52, baseY:0.86,
   sizeAdjust:1, flip:false, keystone:0,
-  rotate:0, depth:78, fov:69, sideShade:0.42,
-  contactOp:0.75, contactSpread:1,
-  shadowDir:205, shadowLen:0.55, shadowSoft:14, shadowOp:0.38,
+  rotate:0, depth:78, fov:75, sideShade:0.42,
+  roomAngle:0, vpMode:false,
+  vpPts:[{x:0.05,y:0.97},{x:0.40,y:0.73},{x:0.96,y:0.93},{x:0.62,y:0.73}],
+  contactOp:0.88, contactSpread:1,
+  shadowDir:205, shadowLen:0.55, shadowSoft:14, shadowOp:0.48,
   refl:0.14,
-  harm:0.55, bright:0, warm:0, trim:1, grain:0.35,
+  harm:0.55, tint:0.22, bright:0, warm:0, trim:1, grain:0.35,
   compare:false
 };
 const DEFAULTS = JSON.parse(JSON.stringify(S));
@@ -629,7 +651,14 @@ function regionStats(){
   if(!n) return null;
   const mean=s.map(v=>v/n);
   const std=q.map((v,c)=>Math.sqrt(Math.max(1,v/n-mean[c]*mean[c])));
-  return {mean,std};
+  let ys=0,yq=0;
+  for(let y=y0;y<=y1;y++) for(let x=x0;x<=x1;x++){
+    const i=(y*w+x)*4;
+    const Y=0.299*data[i]+0.587*data[i+1]+0.114*data[i+2];
+    ys+=Y; yq+=Y*Y;
+  }
+  const my=ys/n;
+  return {mean,std,my,sy:Math.sqrt(Math.max(1,yq/n-my*my))};
 }
 
 function rebuildProc(){
@@ -640,35 +669,44 @@ function rebuildProc(){
   c.drawImage(trimC,0,0);
 
   const d=c.getImageData(0,0,w,h), a=d.data;
-  // 商品本身的統計（只算不透明像素）
-  let n=0,s=[0,0,0],q=[0,0,0];
+  /* 曝光與色度必須分開處理。
+     舊版把商品的「每個通道平均」整個搬向環境色，結果銀色機身在暖色木地板旁
+     會被染成米黃。現在改成：亮度（曝光/黑階/對比）完整匹配，色偏則只做
+     小幅度且有上限的位移，中性色永遠保持中性。 */
+  let n=0, sy=0, qy=0, sc=[0,0,0];
   for(let i=0;i<a.length;i+=4){
     if(a[i+3]<140) continue;
-    for(let k=0;k<3;k++){ const v=a[i+k]; s[k]+=v; q[k]+=v*v; }
+    const Y=0.299*a[i]+0.587*a[i+1]+0.114*a[i+2];
+    sy+=Y; qy+=Y*Y;
+    sc[0]+=a[i]; sc[1]+=a[i+1]; sc[2]+=a[i+2];
     n++;
   }
   const room=regionStats();
-  let mean=[128,128,128], std=[50,50,50], gain=[1,1,1], off=[0,0,0];
-  if(n>0){
-    mean=s.map(v=>v/n);
-    std=q.map((v,k)=>Math.sqrt(Math.max(1,v/n-mean[k]*mean[k])));
-  }
-  if(room && n>0 && S.harm>0){
-    for(let k=0;k<3;k++){
-      const target=lerp(mean[k], room.mean[k], S.harm*0.72);
-      const ratio=clamp(room.std[k]/std[k],0.72,1.35);
-      gain[k]=lerp(1, ratio, S.harm*0.55);
-      off[k]=target-mean[k]*gain[k];
+  let gY=1, offY=0, cast=[0,0,0];
+  if(n>0 && room){
+    const my=sy/n, stdy=Math.sqrt(Math.max(1,qy/n-my*my));
+    const pm=sc.map(v=>v/n);
+    if(S.harm>0){
+      gY=lerp(1, clamp(room.sy/stdy,0.78,1.28), S.harm*0.5);
+      offY=lerp(my, room.my, S.harm*0.6) - my*gY;
+    }
+    if(S.tint>0){
+      // 色偏＝各通道相對自身亮度的偏移量；只搬「偏移量的差」，並且上限 ±14
+      const CAP=14;
+      for(let k=0;k<3;k++){
+        const roomCast=room.mean[k]-room.my, prodCast=pm[k]-my;
+        cast[k]=clamp((roomCast-prodCast)*S.tint, -CAP, CAP);
+      }
     }
   }
   const b=S.bright, wm=S.warm;
-  const addR=b+wm*0.75, addG=b, addB=b-wm*0.85;
-  if(S.harm>0 || b!==0 || wm!==0){
+  const add=[b+wm*0.75+cast[0], b+cast[1], b-wm*0.85+cast[2]];
+  if(gY!==1 || offY!==0 || add[0]||add[1]||add[2]){
     for(let i=0;i<a.length;i+=4){
       if(a[i+3]===0) continue;
-      a[i]  =clamp(a[i]  *gain[0]+off[0]+addR,0,255);
-      a[i+1]=clamp(a[i+1]*gain[1]+off[1]+addG,0,255);
-      a[i+2]=clamp(a[i+2]*gain[2]+off[2]+addB,0,255);
+      a[i]  =clamp(a[i]  *gY+offY+add[0],0,255);
+      a[i+1]=clamp(a[i+1]*gY+offY+add[1],0,255);
+      a[i+2]=clamp(a[i+2]*gY+offY+add[2],0,255);
     }
     c.putImageData(d,0,0);
   }
@@ -725,6 +763,41 @@ function geom(k){
 }
 
 /* ============================================================
+   消失點：兩條沿地面的平行線，交點同時給出
+   （a）正確的視平線高度  （b）房間深度軸的方向 → 轉向基準
+   ============================================================ */
+function vpPoint(g){
+  const P=S.vpPts.map(p=>({x:p.x*g.W,y:p.y*g.H}));
+  const r1={x:P[1].x-P[0].x,y:P[1].y-P[0].y};
+  const r2={x:P[3].x-P[2].x,y:P[3].y-P[2].y};
+  const den=r1.x*r2.y-r1.y*r2.x;
+  if(Math.abs(den)<1e-4) return null;
+  const t=((P[2].x-P[0].x)*r2.y-(P[2].y-P[0].y)*r2.x)/den;
+  const v={x:P[0].x+r1.x*t, y:P[0].y+r1.y*t};
+  if(!isFinite(v.x)||!isFinite(v.y)||Math.abs(v.x)>g.W*14||Math.abs(v.y)>g.H*14) return null;
+  return v;
+}
+function focal(g){ return (Math.max(g.W,g.H)/2)/Math.tan(S.fov*Math.PI/360); }
+
+function applyVP(){
+  const g=geom(1), v=vpPoint(g);
+  if(!v){ flash('兩條線幾乎平行，交點算不出來。請讓兩條線各自貼合地面上不同方向的邊（例如左邊牆腳線與右邊女兒牆底線）。'); return; }
+  S.horizonY=clamp(v.y/g.H,0.02,0.96);
+  S.baseY=Math.max(S.baseY,S.horizonY+0.03);
+  S.roomAngle=clamp(Math.atan2(v.x-g.W/2, focal(g))*180/Math.PI,-75,75);
+  S.vpMode=false;
+  $('btn-vp').classList.remove('on');
+  syncUI(); rebuildProc(); paint();
+  flash('已套用：視平線 '+Math.round(S.horizonY*100)+'%，牆面基準 '+S.roomAngle.toFixed(1)+'°。轉向滑桿現在是相對牆面的偏移量。');
+}
+let flashT=0;
+function flash(msg){
+  const el=$('flash');
+  el.textContent=msg; el.hidden=false;
+  clearTimeout(flashT); flashT=setTimeout(()=>{el.hidden=true;},7000);
+}
+
+/* ============================================================
    繪製
    ============================================================ */
 function drawShape(ctx,src,cx,by,w,h,keystone,flip){
@@ -758,7 +831,7 @@ function proj(g){
   const sc=S.sizeAdjust;
   return {f,cx,cy,Hc,z0,X0,
           Ho:S.productH*sc, Wo:S.productH*g.ar*sc, Do:Math.max(1,S.depth)*sc,
-          th:S.rotate*Math.PI/180, z:z0};
+          th:(S.roomAngle+S.rotate)*Math.PI/180, z:z0};
 }
 /* s = 沿商品寬度(cm，0為中心)  t = 沿商品深度(cm，0為正面)  h = 離地高度(cm) */
 function P(pr,s,t,h){
@@ -838,7 +911,7 @@ function render(ctx,k,track){
   ctx.globalCompositeOperation='source-over';
   ctx.globalAlpha=1; ctx.filter='none';
   ctx.drawImage(roomImg,0,0,g.W,g.H);
-  if(S.compare || !procC) return g;
+  if(S.compare || S.vpMode || !procC) return g;
 
   const box=buildBox(g);
   if(track) lastBox=box;
@@ -888,12 +961,12 @@ function render(ctx,k,track){
   if(S.contactOp>0.005){
     const w=bw*S.contactSpread;
     // 轉向後底面往深處延伸，足跡要跟著加高才蓋得住
-    const d=1+Math.abs(Math.sin(S.rotate*Math.PI/180))*0.9;
+    const d=1+Math.abs(Math.sin((S.roomAngle+S.rotate)*Math.PI/180))*0.9;
     ctx.save();
     ctx.globalAlpha=S.contactOp*0.55;
     setBlur(ctx, bh*0.020);
     ctx.drawImage(sil, cx-w*0.55, bot-bh*0.070*d, w*1.10, bh*0.085*d);
-    ctx.globalAlpha=S.contactOp*0.92;
+    ctx.globalAlpha=Math.min(1,S.contactOp*1.06);
     setBlur(ctx, bh*0.006);
     ctx.drawImage(sil, cx-w*0.5, bot-bh*0.024*d, w, bh*0.030*d);
     ctx.restore();
@@ -927,6 +1000,37 @@ function drawGuides(ctx,g){
   ctx.save();
   ctx.setTransform(1,0,0,1,0,0);
   ctx.filter='none'; ctx.globalAlpha=1;
+
+  if(S.vpMode){
+    const P=S.vpPts.map(p=>({x:p.x*g.W,y:p.y*g.H})), v=vpPoint(g);
+    const thin=Math.max(1.2,g.H*0.0022), thick=Math.max(3,g.H*0.005);
+    [[0,1,'rgba(255,196,60,.95)'],[2,3,'rgba(90,200,150,.95)']].forEach(([i,j,col])=>{
+      ctx.strokeStyle=col;
+      if(v){ ctx.setLineDash([g.W*0.01,g.W*0.008]); ctx.lineWidth=thin;
+        ctx.beginPath(); ctx.moveTo(P[j].x,P[j].y); ctx.lineTo(v.x,v.y); ctx.stroke();
+        ctx.setLineDash([]); }
+      ctx.lineWidth=thick;
+      ctx.beginPath(); ctx.moveTo(P[i].x,P[i].y); ctx.lineTo(P[j].x,P[j].y); ctx.stroke();
+    });
+    const r=Math.max(7,g.H*0.012);
+    P.forEach((p,n)=>{
+      ctx.beginPath(); ctx.arc(p.x,p.y,r,0,7);
+      ctx.fillStyle=n<2?'rgba(255,196,60,1)':'rgba(90,200,150,1)';
+      ctx.fill(); ctx.strokeStyle='rgba(0,0,0,.65)'; ctx.lineWidth=2.5; ctx.stroke();
+    });
+    if(v){
+      ctx.setLineDash([g.W*0.014,g.W*0.01]);
+      ctx.strokeStyle='rgba(212,17,74,.8)'; ctx.lineWidth=thin;
+      ctx.beginPath(); ctx.moveTo(0,v.y); ctx.lineTo(g.W,v.y); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.beginPath(); ctx.arc(v.x,v.y,r*1.35,0,7);
+      ctx.fillStyle='rgba(212,17,74,1)'; ctx.fill();
+      ctx.strokeStyle='#fff'; ctx.lineWidth=3; ctx.stroke();
+    }
+    ctx.restore();
+    return;
+  }
+
   const y=g.horizonY;
   ctx.strokeStyle='rgba(212,17,74,.85)'; ctx.lineWidth=Math.max(1,g.H*0.0016);
   ctx.setLineDash([g.W*0.016,g.W*0.012]);
@@ -969,6 +1073,9 @@ function updateStatus(g){
   const el=$('s-dev');
   el.textContent = dev===0 ? '符合真實比例' : (dev>0?'+':'')+dev+'%';
   el.className = Math.abs(dev)>8 ? 'warn' : '';
+  const rm=$('s-room');
+  rm.textContent = Math.abs(S.roomAngle)>0.05 ? S.roomAngle.toFixed(1)+'°' : '未校正';
+  rm.className = Math.abs(S.roomAngle)>0.05 ? '' : 'warn';
 }
 
 /* ============================================================
@@ -982,6 +1089,16 @@ function viewPos(e){
 view.addEventListener('pointerdown',e=>{
   if(!roomImg||!prodImg) return;
   const p=viewPos(e);
+  if(S.vpMode){
+    let best=-1, bd=1e9;
+    S.vpPts.forEach((q,i)=>{
+      const d=Math.hypot((q.x-p.x)*view.width,(q.y-p.y)*view.height);
+      if(d<bd){ bd=d; best=i; }
+    });
+    if(bd < Math.max(26, view.height*0.03)) drag={type:'vp', idx:best};
+    if(drag){ view.setPointerCapture(e.pointerId); view.classList.add('dragging'); e.preventDefault(); }
+    return;
+  }
   if(Math.abs(p.y-S.horizonY) < 0.018){
     drag={type:'horizon'};
   }else if(lastBox && view.width>1){
@@ -996,6 +1113,10 @@ view.addEventListener('pointerdown',e=>{
 view.addEventListener('pointermove',e=>{
   if(!drag) return;
   const p=viewPos(e);
+  if(drag.type==='vp'){
+    S.vpPts[drag.idx]={x:clamp(p.x,-0.3,1.3), y:clamp(p.y,-0.3,1.3)};
+    paint(); return;
+  }
   if(drag.type==='horizon'){
     S.horizonY=clamp(p.y,0.02,0.96);
     $('c-horizon').value=(S.horizonY*100).toFixed(1);
@@ -1034,7 +1155,7 @@ const BIND=[
   ['c-horizon','v-horizon', v=>{S.horizonY=v/100;}, v=>Math.round(v)+'%', 'proc'],
   ['c-size','v-size', v=>{S.sizeAdjust=v/100;}, v=>Math.round(v)+'%', 'proc'],
   ['c-keystone','v-keystone', v=>{S.keystone=v/100;}, v=>v.toFixed(1), ''],
-  ['c-rotate','v-rotate', v=>{S.rotate=v;}, v=>(v>0?'+':'')+v.toFixed(0)+'°', ''],
+  ['c-rotate','v-rotate', v=>{S.rotate=v;}, rotLabel, ''],
   ['c-sideshade','v-sideshade', v=>{S.sideShade=v/100;}, fmtPct2, 'side'],
   ['c-fov','v-fov', v=>{S.fov=v;}, v=>Math.round(v)+'°', ''],
   ['c-contactop','v-contactop', v=>{S.contactOp=v/100;}, fmtPct2, ''],
@@ -1045,12 +1166,17 @@ const BIND=[
   ['c-shadowop','v-shadowop', v=>{S.shadowOp=v/100;}, fmtPct2, ''],
   ['c-refl','v-refl', v=>{S.refl=v/100;}, fmtPct2, ''],
   ['c-harm','v-harm', v=>{S.harm=v/100;}, fmtPct2, 'proc'],
+  ['c-tint','v-tint', v=>{S.tint=v/100;}, fmtPct2, 'proc'],
   ['c-bright','v-bright', v=>{S.bright=v;}, v=>(v>0?'+':'')+v, 'proc'],
   ['c-warm','v-warm', v=>{S.warm=v;}, v=>(v>0?'+':'')+v, 'proc'],
   ['c-trim','v-trim', v=>{S.trim=v;}, v=>v+' px', 'trim'],
   ['c-grain','v-grain', v=>{S.grain=v/100;}, fmtPct2, '']
 ];
 function fmtPct2(v){ return Math.round(v)+'%'; }
+function rotLabel(v){
+  const tot=S.roomAngle+v;
+  return (v>0?'+':'')+v.toFixed(0)+'°'+(Math.abs(S.roomAngle)>0.05?' → '+tot.toFixed(0)+'°':'');
+}
 
 let procTimer=0;
 function scheduleProc(kind){
@@ -1087,6 +1213,20 @@ $('p-preset').addEventListener('change',e=>{
   $('p-height').value=S.productH; $('p-depth').value=S.depth;
   paint();
 });
+$('btn-vp').addEventListener('click',e=>{
+  S.vpMode=!S.vpMode;
+  e.currentTarget.classList.toggle('on',S.vpMode);
+  e.currentTarget.textContent=S.vpMode?'取消消失點校正':'用消失點自動校正';
+  $('btn-vp-apply').hidden=!S.vpMode;
+  if(S.vpMode) flash('把黃色那條線拉到貼合地面的一條邊（例如左邊牆腳線），綠色那條拉到另一個方向的地面邊（例如右邊女兒牆底線）。兩條線都要沿著地面，而且方向不同。對好後按「套用消失點」。');
+  paint();
+});
+$('btn-vp-apply').addEventListener('click',applyVP);
+document.querySelectorAll('[data-fov]').forEach(b=>b.addEventListener('click',()=>{
+  S.fov=parseFloat(b.dataset.fov);
+  $('c-fov').value=S.fov; $('v-fov').textContent=S.fov+'°';
+  paint();
+}));
 $('btn-flip').addEventListener('click',e=>{
   S.flip=!S.flip;
   e.currentTarget.classList.toggle('on',S.flip);
@@ -1110,7 +1250,7 @@ document.querySelectorAll('.sw').forEach(b=>b.addEventListener('click',()=>{
   Object.assign(S, p==='reset'
     ? {shadowDir:DEFAULTS.shadowDir,shadowLen:DEFAULTS.shadowLen,shadowSoft:DEFAULTS.shadowSoft,
        shadowOp:DEFAULTS.shadowOp,contactOp:DEFAULTS.contactOp,contactSpread:DEFAULTS.contactSpread,
-       refl:DEFAULTS.refl,grain:DEFAULTS.grain,harm:DEFAULTS.harm,bright:0,warm:0,
+       refl:DEFAULTS.refl,grain:DEFAULTS.grain,harm:DEFAULTS.harm,tint:DEFAULTS.tint,bright:0,warm:0,
        sizeAdjust:1,keystone:0,rotate:0}
     : PRESETS[p]);
   syncUI(); rebuildProc(); paint();
@@ -1122,7 +1262,7 @@ function syncUI(){
   set('c-horizon',(S.horizonY*100).toFixed(1),'v-horizon',Math.round(S.horizonY*100)+'%');
   set('c-size',Math.round(S.sizeAdjust*100),'v-size',Math.round(S.sizeAdjust*100)+'%');
   set('c-keystone',(S.keystone*100).toFixed(1),'v-keystone',(S.keystone*100).toFixed(1));
-  set('c-rotate',S.rotate,'v-rotate',(S.rotate>0?'+':'')+Math.round(S.rotate)+'°');
+  set('c-rotate',S.rotate,'v-rotate',rotLabel(S.rotate));
   set('c-sideshade',Math.round(S.sideShade*100),'v-sideshade',Math.round(S.sideShade*100)+'%');
   set('c-fov',S.fov,'v-fov',Math.round(S.fov)+'°');
   set('c-contactop',Math.round(S.contactOp*100),'v-contactop',Math.round(S.contactOp*100)+'%');
@@ -1133,6 +1273,7 @@ function syncUI(){
   set('c-shadowop',Math.round(S.shadowOp*100),'v-shadowop',Math.round(S.shadowOp*100)+'%');
   set('c-refl',Math.round(S.refl*100),'v-refl',Math.round(S.refl*100)+'%');
   set('c-harm',Math.round(S.harm*100),'v-harm',Math.round(S.harm*100)+'%');
+  set('c-tint',Math.round(S.tint*100),'v-tint',Math.round(S.tint*100)+'%');
   set('c-bright',S.bright,'v-bright',(S.bright>0?'+':'')+S.bright);
   set('c-warm',S.warm,'v-warm',(S.warm>0?'+':'')+S.warm);
   set('c-grain',Math.round(S.grain*100),'v-grain',Math.round(S.grain*100)+'%');
