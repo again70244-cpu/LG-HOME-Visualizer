@@ -231,7 +231,7 @@ input[type=number]:focus,select:focus{outline:2px solid var(--accent);outline-of
     </div>
 
     <dl class="status">
-      <div class="stat"><dt>商品實際尺寸</dt><dd id="s-dim">—</dd></div>
+      <div class="stat"><dt>實際尺寸 寬×深×高</dt><dd id="s-dim">—</dd></div>
       <div class="stat"><dt>此位置比例尺</dt><dd id="s-scale">—</dd></div>
       <div class="stat"><dt>畫面佔高</dt><dd id="s-px">—</dd></div>
       <div class="stat"><dt>比例偏差</dt><dd id="s-dev">—</dd></div>
@@ -263,18 +263,22 @@ input[type=number]:focus,select:focus{outline:2px solid var(--accent);outline-of
             <span style="font-size:11.5px;color:var(--ink-dim)">商品高度 · 依型錄實際尺寸</span>
             <select id="p-preset">
               <option value="">選擇常見品類（參考值，可自行修改）…</option>
-              <option value="170">直立式洗乾衣機 · 約 170 cm</option>
-              <option value="179">對開門冰箱 · 約 179 cm</option>
-              <option value="85">滾筒洗衣機 · 約 85 cm</option>
-              <option value="100">空氣清淨機 · 約 100 cm</option>
-              <option value="185">衣物護理機 · 約 185 cm</option>
-              <option value="60">除濕機 · 約 60 cm</option>
+              <option value="170,78">直立式洗乾衣機 · 高 170 / 深 78</option>
+              <option value="179,92">對開門冰箱 · 高 179 / 深 92</option>
+              <option value="85,69">滾筒洗衣機 · 高 85 / 深 69</option>
+              <option value="100,38">空氣清淨機 · 高 100 / 深 38</option>
+              <option value="185,69">衣物護理機 · 高 185 / 深 69</option>
+              <option value="60,32">除濕機 · 高 60 / 深 32</option>
             </select>
           </label>
           <div class="row">
             <label class="fld">
               <div class="fld-top"><span>實際高度</span><b>cm</b></div>
               <input type="number" id="p-height" value="170" min="10" max="300" step="1">
+            </label>
+            <label class="fld">
+              <div class="fld-top"><span>實際深度</span><b>cm</b></div>
+              <input type="number" id="p-depth" value="78" min="5" max="200" step="1">
             </label>
           </div>
           <label class="fld">
@@ -285,14 +289,27 @@ input[type=number]:focus,select:focus{outline:2px solid var(--accent);outline-of
             <div class="fld-top"><span>視平線位置</span><b id="v-horizon">42%</b></div>
             <input type="range" id="c-horizon" min="2" max="96" step="0.2" value="42">
           </label>
+          <label class="fld">
+            <div class="fld-top"><span>鏡頭視角</span><b id="v-fov">69°</b></div>
+            <input type="range" id="c-fov" min="28" max="105" step="1" value="69">
+          </label>
           <p class="hint">視平線＝拍照時鏡頭的水平高度。把畫面中的地磚縫或牆面橫線往遠處延伸，交會的高度就是它。校正正確後，把商品往深處拖會自動變小，比例永遠正確。</p>
         </div>
       </section>
 
       <section class="step">
-        <div class="step-hd"><i class="step-n">3</i><h3>擺放與透視</h3></div>
+        <div class="step-hd"><i class="step-n">3</i><h3>擺放、轉向與透視</h3></div>
         <div class="step-body">
           <p class="hint" style="margin-top:0">直接在畫面上拖曳商品；拖視平線可重新校正。</p>
+          <label class="fld">
+            <div class="fld-top"><span>水平轉向</span><b id="v-rotate">0°</b></div>
+            <input type="range" id="c-rotate" min="-72" max="72" step="0.5" value="0">
+          </label>
+          <label class="fld">
+            <div class="fld-top"><span>側面明暗</span><b id="v-sideshade">42%</b></div>
+            <input type="range" id="c-sideshade" min="0" max="100" step="1" value="42">
+          </label>
+          <p class="hint">轉向時側面由幾何運算即時生成，材質取自去背圖的邊緣像素，所以顏色與商品一致。側面僅作擺放示意，細節不會與實機相同。</p>
           <label class="fld">
             <div class="fld-top"><span>尺寸微調</span><b id="v-size">100%</b></div>
             <input type="range" id="c-size" min="50" max="180" step="1" value="100">
@@ -410,6 +427,7 @@ const S = {
   productH:170, cameraH:150, horizonY:0.42,
   baseX:0.52, baseY:0.86,
   sizeAdjust:1, flip:false, keystone:0,
+  rotate:0, depth:78, fov:69, sideShade:0.42,
   contactOp:0.75, contactSpread:1,
   shadowDir:205, shadowLen:0.55, shadowSoft:14, shadowOp:0.38,
   refl:0.14,
@@ -420,7 +438,7 @@ const DEFAULTS = JSON.parse(JSON.stringify(S));
 
 let roomImg=null, prodImg=null;
 let roomSmall=null, roomSmallData=null;   // 取樣用縮圖
-let trimC=null, procC=null, silC=null, reflC=null;
+let trimC=null, procC=null, sideC=null, lastBox=null;
 let usingDemoRoom=true, usingDemoProd=true;
 
 const view = $('view');
@@ -430,13 +448,16 @@ const vctx = view.getContext('2d');
    小工具
    ============================================================ */
 function cvs(w,h){ const c=document.createElement('canvas'); c.width=Math.max(1,Math.round(w)); c.height=Math.max(1,Math.round(h)); return c; }
-let _scratch=null;
-function scratch(w,h){
+const _pool=[];
+function pad(i,w,h){
   w=Math.max(1,Math.round(w)); h=Math.max(1,Math.round(h));
-  if(!_scratch) _scratch=cvs(w,h);
-  if(_scratch.width!==w||_scratch.height!==h){ _scratch.width=w; _scratch.height=h; }
-  else _scratch.getContext('2d').clearRect(0,0,w,h);
-  return _scratch;
+  let c=_pool[i];
+  if(!c){ c=_pool[i]=cvs(w,h); return c; }
+  if(c.width!==w||c.height!==h){ c.width=w; c.height=h; }
+  else c.getContext('2d').clearRect(0,0,w,h);
+  const x=c.getContext('2d');
+  x.globalCompositeOperation='source-over'; x.globalAlpha=1; x.filter='none';
+  return c;
 }
 const blurOK = (()=>{ const c=cvs(2,2).getContext('2d'); c.filter='blur(1px)'; return c.filter!=='none'; })();
 function setBlur(ctx,px){ ctx.filter = (blurOK && px>0.2) ? 'blur('+px.toFixed(2)+'px)' : 'none'; }
@@ -564,6 +585,30 @@ function rebuildTrim(){
     }
     c.putImageData(d,0,0);
   }
+  autoCrop();
+}
+
+/* 去背圖常帶透明邊界。不裁掉的話「圖高＝商品高」的前提不成立，
+   比例會整個算錯，側面取樣也會取到空白。 */
+function autoCrop(){
+  const w=trimC.width, h=trimC.height;
+  const a=trimC.getContext('2d').getImageData(0,0,w,h).data;
+  let x0=w,y0=h,x1=-1,y1=-1;
+  for(let y=0;y<h;y++){
+    const o=y*w;
+    for(let x=0;x<w;x++){
+      if(a[(o+x)*4+3]>8){
+        if(x<x0)x0=x; if(x>x1)x1=x;
+        if(y<y0)y0=y; if(y>y1)y1=y;
+      }
+    }
+  }
+  if(x1<x0||y1<y0) return;
+  if(x0===0&&y0===0&&x1===w-1&&y1===h-1) return;
+  const cw=x1-x0+1, ch=y1-y0+1;
+  const c=cvs(cw,ch);
+  c.getContext('2d').drawImage(trimC,x0,y0,cw,ch,0,0,cw,ch);
+  trimC=c;
 }
 
 function regionStats(){
@@ -628,24 +673,40 @@ function rebuildProc(){
     c.putImageData(d,0,0);
   }
 
-  // 黑色剪影（投射／接觸陰影用）
-  silC=cvs(w,h);
-  const sc=silC.getContext('2d');
-  sc.drawImage(procC,0,0);
-  sc.globalCompositeOperation='source-in';
-  sc.fillStyle='#000'; sc.fillRect(0,0,w,h);
+  buildSide();
+  buildTopTint();
+}
 
-  // 地板倒影：垂直翻轉 + 由下往上淡出
-  reflC=cvs(w,h);
-  const rc=reflC.getContext('2d');
-  rc.translate(0,h); rc.scale(1,-1); rc.drawImage(procC,0,0);
-  rc.setTransform(1,0,0,1,0,0);
-  rc.globalCompositeOperation='destination-out';
-  const gr=rc.createLinearGradient(0,0,0,h);
-  gr.addColorStop(0,'rgba(0,0,0,0.30)');
-  gr.addColorStop(0.45,'rgba(0,0,0,0.92)');
-  gr.addColorStop(1,'rgba(0,0,0,1)');
-  rc.fillStyle=gr; rc.fillRect(0,0,w,h);
+/* 頂面色：商品低於相機高度時看得到頂面，取頂端像素的平均色來填 */
+let topTint='#8a8f94';
+function buildTopTint(){
+  const w=procC.width, h=procC.height;
+  const band=Math.max(1,Math.round(h*0.04));
+  const d=procC.getContext('2d').getImageData(0,0,w,band).data;
+  let n=0,r=0,g=0,b=0;
+  for(let i=0;i<d.length;i+=4){ if(d[i+3]<140) continue; r+=d[i];g+=d[i+1];b+=d[i+2];n++; }
+  topTint = n ? 'rgb('+Math.round(r/n)+','+Math.round(g/n)+','+Math.round(b/n)+')' : '#8a8f94';
+}
+
+/* 側面材質：從去背圖靠邊緣的像素欄擠出。
+   這樣側面自動帶有商品的真實顏色，以及上下緣的輪廓收邊（圓角、底座）。 */
+function buildSide(){
+  if(!procC) return;
+  const ph=procC.height, sw=112;
+  const inset=Math.max(1,Math.round(procC.width*0.05));
+  sideC=[0,1].map(right=>{
+    const c=cvs(sw,ph), x=c.getContext('2d');
+    x.imageSmoothingEnabled=true;
+    x.drawImage(procC, right?procC.width-inset-2:inset, 0, 2, ph, 0, 0, sw, ph);
+    const a0=0.06+S.sideShade*0.42, a1=Math.min(0.93,a0+0.24);
+    x.globalCompositeOperation='source-atop';
+    const gr=x.createLinearGradient(0,0,sw,0);
+    gr.addColorStop(0,'rgba(0,0,0,'+a0.toFixed(3)+')');
+    gr.addColorStop(1,'rgba(0,0,0,'+a1.toFixed(3)+')');
+    x.fillStyle=gr; x.fillRect(0,0,sw,ph);
+    x.globalCompositeOperation='source-over';
+    return c;
+  });
 }
 
 /* ============================================================
@@ -659,7 +720,7 @@ function geom(k){
   const denom=Math.max(baseY-horizonY, H*0.015);
   const pxPerCm=denom/S.cameraH;
   const drawH=denom*(S.productH/S.cameraH)*S.sizeAdjust;
-  const ar=prodImg ? prodImg.width/prodImg.height : 0.4;
+  const ar=trimC ? trimC.width/trimC.height : 0.4;
   return {W,H,k,horizonY,baseX,baseY,drawH,drawW:drawH*ar,pxPerCm,ar};
 }
 
@@ -682,7 +743,95 @@ function drawShape(ctx,src,cx,by,w,h,keystone,flip){
   ctx.restore();
 }
 
-function render(ctx,k){
+/* ============================================================
+   轉向：把商品當成長方體投影
+   物體繞垂直軸旋轉、相機無翻滾時，垂直線在畫面上仍是垂直線，
+   所以「垂直條帶」渲染是精確投影，不是近似。
+   前面用去背圖，側面用擠出的邊緣材質。
+   ============================================================ */
+function proj(g){
+  const long=Math.max(g.W,g.H);
+  const f=(long/2)/Math.tan(S.fov*Math.PI/360);   // 焦距（px）
+  const cy=g.horizonY, cx=g.W/2, Hc=S.cameraH;
+  const z0=f/g.pxPerCm;                           // 商品底部到相機的距離（cm）
+  const X0=(g.baseX-cx)*z0/f;
+  const sc=S.sizeAdjust;
+  return {f,cx,cy,Hc,z0,X0,
+          Ho:S.productH*sc, Wo:S.productH*g.ar*sc, Do:Math.max(1,S.depth)*sc,
+          th:S.rotate*Math.PI/180, z:z0};
+}
+/* s = 沿商品寬度(cm，0為中心)  t = 沿商品深度(cm，0為正面)  h = 離地高度(cm) */
+function P(pr,s,t,h){
+  const si=Math.sin(pr.th), co=Math.cos(pr.th);
+  const z=Math.max(12, pr.z0 - s*si + t*co);
+  const X=pr.X0 + s*co + t*si;
+  return { x:pr.cx + pr.f*X/z, y:pr.cy + pr.f*(pr.Hc-h)/z };
+}
+
+function buildBox(g){
+  const pr=proj(g);
+  const sgn=pr.th>=0?1:-1, sE=sgn*pr.Wo/2, rot=Math.abs(pr.th)>0.003;
+  const pts=[P(pr,-pr.Wo/2,0,0),P(pr,-pr.Wo/2,0,pr.Ho),
+             P(pr, pr.Wo/2,0,0),P(pr, pr.Wo/2,0,pr.Ho)];
+  if(rot) pts.push(P(pr,sE,pr.Do,0),P(pr,sE,pr.Do,pr.Ho));
+  let x0=1e9,x1=-1e9,y0=1e9,y1=-1e9;
+  for(const p of pts){
+    if(p.x<x0)x0=p.x; if(p.x>x1)x1=p.x;
+    if(p.y<y0)y0=p.y; if(p.y>y1)y1=p.y;
+  }
+  x0=Math.floor(x0-2); y0=Math.floor(y0-2);
+  const bw=Math.ceil(x1-x0+2), bh=Math.ceil(y1-y0+2);
+  if(!(bw>2&&bh>2)||bw>9000||bh>9000) return null;
+
+  const c=cvs(bw,bh), x=c.getContext('2d');
+  x.imageSmoothingEnabled=true;
+  const N=Math.max(90,Math.min(420,Math.round(bw*1.5)));
+
+  // 頂面：只有商品比相機矮時才看得到
+  if(rot && pr.Ho < pr.Hc-1){
+    const q=[P(pr,-pr.Wo/2,0,pr.Ho), P(pr,pr.Wo/2,0,pr.Ho),
+             P(pr, pr.Wo/2,pr.Do,pr.Ho), P(pr,-pr.Wo/2,pr.Do,pr.Ho)];
+    x.beginPath();
+    x.moveTo(q[0].x-x0,q[0].y-y0);
+    for(let i=1;i<4;i++) x.lineTo(q[i].x-x0,q[i].y-y0);
+    x.closePath();
+    const gt=x.createLinearGradient(0,q[0].y-y0,0,q[2].y-y0);
+    gt.addColorStop(0,topTint); gt.addColorStop(1,topTint);
+    x.fillStyle=gt; x.globalAlpha=1; x.fill();
+    // 頂面朝上迎光，往深處略暗
+    const sh=x.createLinearGradient(0,q[0].y-y0,0,q[2].y-y0);
+    sh.addColorStop(0,'rgba(255,255,255,0.10)');
+    sh.addColorStop(1,'rgba(0,0,0,'+(0.10+S.sideShade*0.22).toFixed(3)+')');
+    x.fillStyle=sh; x.fill();
+  }
+
+  // 側面：在共用邊上位於前面板之後，先畫
+  if(rot && sideC){
+    const tex=sideC[sgn>0?1:0], tw=tex.width;
+    for(let i=0;i<N;i++){
+      const ta=i/N, tb=(i+1)/N, tm=(i+0.5)/N;
+      const xa=P(pr,sE,pr.Do*ta,0).x, xb=P(pr,sE,pr.Do*tb,0).x;
+      const dw=Math.abs(xb-xa); if(dw<0.02) continue;
+      const lo=P(pr,sE,pr.Do*tm,0).y, hi=P(pr,sE,pr.Do*tm,pr.Ho).y;
+      x.drawImage(tex, ta*tw, 0, tw/N, tex.height,
+                  Math.min(xa,xb)-x0, hi-y0, dw+0.8, lo-hi);
+    }
+  }
+  // 前面板
+  const src=procC, sw=src.width;
+  for(let i=0;i<N;i++){
+    const ua=i/N, ub=(i+1)/N, um=(i+0.5)/N;
+    const xa=P(pr,-pr.Wo/2+pr.Wo*ua,0,0).x, xb=P(pr,-pr.Wo/2+pr.Wo*ub,0,0).x;
+    const dw=Math.abs(xb-xa); if(dw<0.02) continue;
+    const sm=-pr.Wo/2+pr.Wo*um;
+    const lo=P(pr,sm,0,0).y, hi=P(pr,sm,0,pr.Ho).y;
+    x.drawImage(src, (S.flip?1-ub:ua)*sw, 0, sw/N, src.height,
+                Math.min(xa,xb)-x0, hi-y0, dw+0.8, lo-hi);
+  }
+  return {c,x0,y0,w:bw,h:bh};
+}
+
+function render(ctx,k,track){
   const g=geom(k);
   ctx.setTransform(1,0,0,1,0,0);
   ctx.clearRect(0,0,g.W,g.H);
@@ -691,61 +840,83 @@ function render(ctx,k){
   ctx.drawImage(roomImg,0,0,g.W,g.H);
   if(S.compare || !procC) return g;
 
+  const box=buildBox(g);
+  if(track) lastBox=box;
+  if(!box) return g;
+  const bw=box.w, bh=box.h, cx=box.x0+bw/2, bot=box.y0+bh;
+
+  // 黑色剪影（陰影用）—— 轉向後剪影是整個長方體，不再只是正面
+  const sil=pad(1,bw,bh), sc=sil.getContext('2d');
+  sc.drawImage(box.c,0,0);
+  sc.globalCompositeOperation='source-in';
+  sc.fillStyle='#000'; sc.fillRect(0,0,bw,bh);
+  sc.globalCompositeOperation='source-over';
+
   // — 地板倒影 —
   if(S.refl>0.005){
+    const rf=pad(2,bw,bh), rc=rf.getContext('2d');
+    rc.save(); rc.translate(0,bh); rc.scale(1,-1); rc.drawImage(box.c,0,0); rc.restore();
+    rc.globalCompositeOperation='destination-out';
+    const gr=rc.createLinearGradient(0,0,0,bh);
+    gr.addColorStop(0,'rgba(0,0,0,0.30)');
+    gr.addColorStop(0.45,'rgba(0,0,0,0.92)');
+    gr.addColorStop(1,'rgba(0,0,0,1)');
+    rc.fillStyle=gr; rc.fillRect(0,0,bw,bh);
+    rc.globalCompositeOperation='source-over';
     ctx.save();
     ctx.globalAlpha=S.refl;
-    setBlur(ctx, g.drawH*0.0022);
-    ctx.drawImage(reflC, g.baseX-g.drawW/2, g.baseY, g.drawW, g.drawH*0.42);
+    setBlur(ctx, bh*0.0022);
+    ctx.drawImage(rf, box.x0, bot, bw, bh*0.42);
     ctx.restore();
   }
 
-  // — 投射陰影：把立面剪影投影到地面（傾斜＋壓縮） —
+  // — 投射陰影：把剪影投影到地面（傾斜＋壓縮） —
   if(S.shadowOp>0.005 && S.shadowLen>0.005){
     const a=S.shadowDir*Math.PI/180;
     const sx=Math.cos(a)*S.shadowLen;
     const sy=Math.sin(a)*S.shadowLen*0.5;
     ctx.save();
     ctx.globalAlpha=S.shadowOp;
-    setBlur(ctx, S.shadowSoft*(g.drawH/900)*2.2);
+    setBlur(ctx, S.shadowSoft*(bh/900)*2.2);
     // x' = x − sx·(y−by)   y' = by + sy·(by−y)
-    ctx.transform(1, 0, -sx, -sy, sx*g.baseY, g.baseY*(1+sy));
-    drawShape(ctx,silC,g.baseX,g.baseY,g.drawW,g.drawH,S.keystone,S.flip);
+    ctx.transform(1, 0, -sx, -sy, sx*bot, bot*(1+sy));
+    drawShape(ctx,sil,cx,bot,bw,bh,S.keystone,false);
     ctx.restore();
   }
 
   // — 接觸陰影：壓扁的足跡，兩層（外散＋核心） —
   if(S.contactOp>0.005){
-    const w=g.drawW*S.contactSpread;
+    const w=bw*S.contactSpread;
+    // 轉向後底面往深處延伸，足跡要跟著加高才蓋得住
+    const d=1+Math.abs(Math.sin(S.rotate*Math.PI/180))*0.9;
     ctx.save();
     ctx.globalAlpha=S.contactOp*0.55;
-    setBlur(ctx, g.drawH*0.020);
-    ctx.drawImage(silC, g.baseX-w*0.55, g.baseY-g.drawH*0.070, w*1.10, g.drawH*0.085);
+    setBlur(ctx, bh*0.020);
+    ctx.drawImage(sil, cx-w*0.55, bot-bh*0.070*d, w*1.10, bh*0.085*d);
     ctx.globalAlpha=S.contactOp*0.92;
-    setBlur(ctx, g.drawH*0.006);
-    ctx.drawImage(silC, g.baseX-w*0.5, g.baseY-g.drawH*0.024, w, g.drawH*0.030);
+    setBlur(ctx, bh*0.006);
+    ctx.drawImage(sil, cx-w*0.5, bot-bh*0.024*d, w, bh*0.030*d);
     ctx.restore();
   }
 
   // — 商品 —
   ctx.save();
   ctx.filter='none'; ctx.globalAlpha=1;
-  drawShape(ctx,procC,g.baseX,g.baseY,g.drawW,g.drawH,S.keystone,S.flip);
+  drawShape(ctx,box.c,cx,bot,bw,bh,S.keystone,false);
   ctx.restore();
 
   // — 雜訊匹配（只疊在商品上） —
-  if(S.grain>0.005 && g.drawW>3 && g.drawH>3){
-    const w=Math.min(3000,Math.ceil(g.drawW)), h=Math.min(3000,Math.ceil(g.drawH));
-    const t=scratch(w,h), tc=t.getContext('2d');
-    tc.globalCompositeOperation='source-over';
+  if(S.grain>0.005 && bw>3 && bh>3){
+    const t=pad(3,Math.min(3000,bw),Math.min(3000,bh)), tc=t.getContext('2d');
     tc.fillStyle=tc.createPattern(noiseTile,'repeat');
-    tc.fillRect(0,0,w,h);
+    tc.fillRect(0,0,t.width,t.height);
     tc.globalCompositeOperation='destination-in';
-    tc.drawImage(procC,0,0,w,h);
+    tc.drawImage(box.c,0,0,t.width,t.height);
+    tc.globalCompositeOperation='source-over';
     ctx.save();
     ctx.globalAlpha=S.grain*0.42;
     ctx.globalCompositeOperation='overlay';
-    ctx.drawImage(t, g.baseX-g.drawW/2, g.baseY-g.drawH, g.drawW, g.drawH);
+    ctx.drawImage(t, box.x0, box.y0, bw, bh);
     ctx.restore();
   }
   ctx.globalCompositeOperation='source-over';
@@ -784,15 +955,14 @@ function paint(){
     const k=Math.min(1, 1400/Math.max(roomImg.width,roomImg.height));
     const W=Math.round(roomImg.width*k), H=Math.round(roomImg.height*k);
     if(view.width!==W||view.height!==H){ view.width=W; view.height=H; }
-    const g=render(vctx,k);
+    const g=render(vctx,k,true);
     if(!S.compare) drawGuides(vctx,g);
     updateStatus(g);
   });
 }
 
 function updateStatus(g){
-  const wcm=S.productH*g.ar;
-  $('s-dim').textContent = Math.round(S.productH)+' × '+Math.round(wcm)+' cm';
+  $('s-dim').textContent = Math.round(S.productH*g.ar)+' × '+Math.round(S.depth)+' × '+Math.round(S.productH)+' cm';
   $('s-scale').textContent = (g.pxPerCm/g.k).toFixed(2)+' px / cm';
   $('s-px').textContent = Math.round(g.drawH/g.k)+' px（'+Math.round(g.drawH/g.H*100)+'% 畫面高）';
   const dev=Math.round((S.sizeAdjust-1)*100);
@@ -812,13 +982,12 @@ function viewPos(e){
 view.addEventListener('pointerdown',e=>{
   if(!roomImg||!prodImg) return;
   const p=viewPos(e);
-  const g=geom(1);
-  const hy=S.horizonY;
-  if(Math.abs(p.y-hy) < 0.018){
+  if(Math.abs(p.y-S.horizonY) < 0.018){
     drag={type:'horizon'};
-  }else{
-    const halfW=(g.drawW/g.W)/2, hh=g.drawH/g.H;
-    if(p.x>S.baseX-halfW-0.02 && p.x<S.baseX+halfW+0.02 && p.y>S.baseY-hh-0.01 && p.y<S.baseY+0.03){
+  }else if(lastBox && view.width>1){
+    const x0=lastBox.x0/view.width, x1=(lastBox.x0+lastBox.w)/view.width;
+    const y0=lastBox.y0/view.height, y1=(lastBox.y0+lastBox.h)/view.height;
+    if(p.x>x0-0.02 && p.x<x1+0.02 && p.y>y0-0.01 && p.y<y1+0.03){
       drag={type:'prod', dx:p.x-S.baseX, dy:p.y-S.baseY};
     }
   }
@@ -865,6 +1034,9 @@ const BIND=[
   ['c-horizon','v-horizon', v=>{S.horizonY=v/100;}, v=>Math.round(v)+'%', 'proc'],
   ['c-size','v-size', v=>{S.sizeAdjust=v/100;}, v=>Math.round(v)+'%', 'proc'],
   ['c-keystone','v-keystone', v=>{S.keystone=v/100;}, v=>v.toFixed(1), ''],
+  ['c-rotate','v-rotate', v=>{S.rotate=v;}, v=>(v>0?'+':'')+v.toFixed(0)+'°', ''],
+  ['c-sideshade','v-sideshade', v=>{S.sideShade=v/100;}, fmtPct2, 'side'],
+  ['c-fov','v-fov', v=>{S.fov=v;}, v=>Math.round(v)+'°', ''],
   ['c-contactop','v-contactop', v=>{S.contactOp=v/100;}, fmtPct2, ''],
   ['c-contactspread','v-contactspread', v=>{S.contactSpread=v/100;}, fmtPct2, ''],
   ['c-shadowdir','v-shadowdir', v=>{S.shadowDir=v;}, v=>Math.round(v)+'°', ''],
@@ -884,6 +1056,7 @@ let procTimer=0;
 function scheduleProc(kind){
   clearTimeout(procTimer);
   procTimer=setTimeout(()=>{
+    if(kind==='side'){ buildSide(); paint(); return; }
     if(kind==='trim') rebuildTrim();
     rebuildProc(); paint();
   }, kind==='trim'?140:70);
@@ -903,10 +1076,15 @@ $('p-height').addEventListener('input',e=>{
   const v=parseFloat(e.target.value);
   if(isFinite(v)&&v>0){ S.productH=v; paint(); }
 });
+$('p-depth').addEventListener('input',e=>{
+  const v=parseFloat(e.target.value);
+  if(isFinite(v)&&v>0){ S.depth=v; paint(); }
+});
 $('p-preset').addEventListener('change',e=>{
   if(!e.target.value) return;
-  S.productH=parseFloat(e.target.value);
-  $('p-height').value=S.productH;
+  const parts=e.target.value.split(',');
+  S.productH=parseFloat(parts[0]); S.depth=parseFloat(parts[1]);
+  $('p-height').value=S.productH; $('p-depth').value=S.depth;
   paint();
 });
 $('btn-flip').addEventListener('click',e=>{
@@ -933,7 +1111,7 @@ document.querySelectorAll('.sw').forEach(b=>b.addEventListener('click',()=>{
     ? {shadowDir:DEFAULTS.shadowDir,shadowLen:DEFAULTS.shadowLen,shadowSoft:DEFAULTS.shadowSoft,
        shadowOp:DEFAULTS.shadowOp,contactOp:DEFAULTS.contactOp,contactSpread:DEFAULTS.contactSpread,
        refl:DEFAULTS.refl,grain:DEFAULTS.grain,harm:DEFAULTS.harm,bright:0,warm:0,
-       sizeAdjust:1,keystone:0}
+       sizeAdjust:1,keystone:0,rotate:0}
     : PRESETS[p]);
   syncUI(); rebuildProc(); paint();
 }));
@@ -944,6 +1122,9 @@ function syncUI(){
   set('c-horizon',(S.horizonY*100).toFixed(1),'v-horizon',Math.round(S.horizonY*100)+'%');
   set('c-size',Math.round(S.sizeAdjust*100),'v-size',Math.round(S.sizeAdjust*100)+'%');
   set('c-keystone',(S.keystone*100).toFixed(1),'v-keystone',(S.keystone*100).toFixed(1));
+  set('c-rotate',S.rotate,'v-rotate',(S.rotate>0?'+':'')+Math.round(S.rotate)+'°');
+  set('c-sideshade',Math.round(S.sideShade*100),'v-sideshade',Math.round(S.sideShade*100)+'%');
+  set('c-fov',S.fov,'v-fov',Math.round(S.fov)+'°');
   set('c-contactop',Math.round(S.contactOp*100),'v-contactop',Math.round(S.contactOp*100)+'%');
   set('c-contactspread',Math.round(S.contactSpread*100),'v-contactspread',Math.round(S.contactSpread*100)+'%');
   set('c-shadowdir',S.shadowDir,'v-shadowdir',Math.round(S.shadowDir)+'°');
@@ -1021,7 +1202,7 @@ $('btn-export').addEventListener('click',()=>{
   const out=cvs(roomImg.width,roomImg.height);
   const oc=out.getContext('2d');
   const wasCompare=S.compare; S.compare=false;
-  render(oc,1);
+  render(oc,1,false);
   S.compare=wasCompare;
   const url=out.toDataURL('image/png');
   $('sheet-img').src=url;
