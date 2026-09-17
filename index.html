@@ -192,6 +192,7 @@ input[type=number]:focus,select:focus{outline:2px solid var(--accent);outline-of
   font-family:var(--mono);
 }
 .sw:hover{border-color:var(--accent);color:var(--accent-ink)}
+.sw.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent-ink)}
 
 .rail-foot{
   padding:14px 18px;padding-block:14px;border-top:1px solid var(--line);
@@ -291,9 +292,15 @@ input[type=number]:focus,select:focus{outline:2px solid var(--accent);outline-of
             </label>
           </div>
           <label class="fld">
-            <div class="fld-top"><span>拍照時的相機高度</span><b id="v-camh">150 cm</b></div>
-            <input type="range" id="c-camh" min="60" max="220" step="1" value="150">
+            <div class="fld-top"><span>拍照時的相機高度</span><b id="v-camh">145 cm</b></div>
+            <input type="range" id="c-camh" min="60" max="220" step="1" value="145">
           </label>
+          <div class="swatches" style="grid-template-columns:repeat(3,1fr)">
+            <button class="sw" data-camh="145" type="button">站姿 145</button>
+            <button class="sw" data-camh="115" type="button">微蹲 115</button>
+            <button class="sw" data-camh="105" type="button">蹲姿 105</button>
+          </div>
+          <p class="hint">高型家電（洗乾衣機、冰箱、衣物護理機）用站姿，相機比商品矮就不必推算頂面。矮型家電（洗衣機、清淨機、除濕機）蹲低拍，看到的頂面越少越真。這三個值請依你自己實測的持機高度調整。</p>
           <label class="fld">
             <div class="fld-top"><span>視平線位置</span><b id="v-horizon">42%</b></div>
             <input type="range" id="c-horizon" min="2" max="96" step="0.2" value="42">
@@ -444,7 +451,7 @@ const lerp = (a,b,t) => a+(b-a)*t;
    狀態
    ============================================================ */
 const S = {
-  productH:170, cameraH:150, horizonY:0.42,
+  productH:170, cameraH:145, horizonY:0.42,
   baseX:0.52, baseY:0.86,
   sizeAdjust:1, flip:false, keystone:0,
   rotate:0, depth:78, fov:75, sideShade:0.42,
@@ -1222,6 +1229,12 @@ $('btn-vp').addEventListener('click',e=>{
   paint();
 });
 $('btn-vp-apply').addEventListener('click',applyVP);
+document.querySelectorAll('[data-camh]').forEach(b=>b.addEventListener('click',()=>{
+  S.cameraH=parseFloat(b.dataset.camh);
+  $('c-camh').value=S.cameraH; $('v-camh').textContent=S.cameraH+' cm';
+  syncCamPresets(); rebuildProc(); paint();
+}));
+$('c-camh').addEventListener('input',syncCamPresets);
 document.querySelectorAll('[data-fov]').forEach(b=>b.addEventListener('click',()=>{
   S.fov=parseFloat(b.dataset.fov);
   $('c-fov').value=S.fov; $('v-fov').textContent=S.fov+'°';
@@ -1256,9 +1269,14 @@ document.querySelectorAll('.sw').forEach(b=>b.addEventListener('click',()=>{
   syncUI(); rebuildProc(); paint();
 }));
 
+function syncCamPresets(){
+  document.querySelectorAll('[data-camh]').forEach(b=>
+    b.classList.toggle('on', parseFloat(b.dataset.camh)===S.cameraH));
+}
 function syncUI(){
   const set=(id,val,out,fmt)=>{ $(id).value=val; $(out).textContent=fmt; };
   set('c-camh',S.cameraH,'v-camh',S.cameraH+' cm');
+  syncCamPresets();
   set('c-horizon',(S.horizonY*100).toFixed(1),'v-horizon',Math.round(S.horizonY*100)+'%');
   set('c-size',Math.round(S.sizeAdjust*100),'v-size',Math.round(S.sizeAdjust*100)+'%');
   set('c-keystone',(S.keystone*100).toFixed(1),'v-keystone',(S.keystone*100).toFixed(1));
@@ -1372,6 +1390,7 @@ rebuildTrim();
 rebuildProc();
 refreshBadge();
 syncUI();
+syncCamPresets();
 paint();
 window.addEventListener('resize',paint);
 })();
