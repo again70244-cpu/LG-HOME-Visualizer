@@ -76,11 +76,14 @@ h1,h2,h3{margin:0;font-weight:600;text-wrap:balance}
 #view.dragging{cursor:grabbing}
 .flash{
   position:absolute;left:20px;right:20px;bottom:18px;z-index:3;
+  display:flex;align-items:center;gap:12px;flex-wrap:wrap;
   background:rgba(30,34,39,.96);border:1px solid var(--accent);
   border-left-width:3px;border-radius:var(--r);
   padding:10px 13px;font-size:12.5px;line-height:1.5;color:var(--ink);
   box-shadow:0 10px 30px rgba(0,0,0,.5);
 }
+.flash span{flex:1;min-width:0}
+.flash .btn{flex:none}
 .demo-badge{
   position:absolute;top:28px;left:28px;z-index:2;
   font-family:var(--mono);font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;
@@ -457,6 +460,7 @@ input[type=number]:focus,select:focus{outline:2px solid var(--accent);outline-of
 
     <div class="rail-foot">
       <button class="btn primary wide" id="btn-export" type="button">輸出合成圖（原始解析度）</button>
+      <button class="btn wide sm" id="btn-reset" type="button">全部重設</button>
     </div>
   </aside>
 </div>
@@ -829,10 +833,19 @@ function applyVP(){
   flash('已套用：視平線 '+Math.round(S.horizonY*100)+'%，牆面基準 '+S.roomAngle.toFixed(1)+'°。轉向滑桿現在是相對牆面的偏移量。');
 }
 let flashT=0;
-function flash(msg){
+function flash(msg,actLabel,act){
   const el=$('flash');
-  el.textContent=msg; el.hidden=false;
-  clearTimeout(flashT); flashT=setTimeout(()=>{el.hidden=true;},7000);
+  el.textContent='';
+  const t=document.createElement('span'); t.textContent=msg; el.appendChild(t);
+  if(actLabel && act){
+    const b=document.createElement('button');
+    b.type='button'; b.className='btn sm'; b.textContent=actLabel;
+    b.addEventListener('click',()=>{ el.hidden=true; act(); });
+    el.appendChild(b);
+  }
+  el.hidden=false;
+  clearTimeout(flashT);
+  flashT=setTimeout(()=>{el.hidden=true;}, actLabel?14000:7000);
 }
 
 /* ============================================================
@@ -1406,6 +1419,9 @@ function syncCamPresets(){
 }
 function syncUI(){
   const set=(id,val,out,fmt)=>{ $(id).value=val; $(out).textContent=fmt; };
+  $('p-height').value=S.productH;
+  $('p-depth').value=S.depth;
+  $('btn-flip').classList.toggle('on',S.flip);
   set('c-camh',S.cameraH,'v-camh',S.cameraH+' cm');
   syncCamPresets();
   set('c-horizon',(S.horizonY*100).toFixed(1),'v-horizon',Math.round(S.horizonY*100)+'%');
@@ -1585,6 +1601,36 @@ wireDrop('dropProd','f-prod',loadProd);
    輸出
    ============================================================ */
 const inFrame = (()=>{ try{ return window.self!==window.top; }catch(_){ return true; } })();
+/* 一鍵重設：所有調整回到預設，保留已載入的照片與 EXIF 讀到的鏡頭視角。
+   不做確認對話框 —— 直接重設，並在訊息列提供「復原」。 */
+function syncAll(){
+  syncUI(); syncCamPresets(); markChips(); lightLabel();
+  setFovSource($('fov-src').textContent, false);
+  rebuildTrim(); rebuildProc(); paint();
+}
+function exitModes(){
+  if(S.lightMode) setLightMode(false);
+  S.vpMode=false; S.compare=false;
+  $('btn-vp').classList.remove('on');
+  $('btn-vp').textContent='用消失點自動校正';
+  $('btn-vp-apply').hidden=true;
+  $('btn-compare').classList.remove('on');
+}
+$('btn-reset').addEventListener('click',()=>{
+  const before=JSON.parse(JSON.stringify(S));
+  const fov=S.fov, fovSrc=$('fov-src').textContent, fovAuto=/EXIF/.test(fovSrc);
+  Object.assign(S, JSON.parse(JSON.stringify(DEFAULTS)));
+  S.fov=fov;                                   // 鏡頭視角來自照片本身，不是使用者的調整
+  exitModes();
+  syncAll();
+  setFovSource(fovSrc, fovAuto);
+  flash('已重設所有調整。照片與鏡頭視角保留。', '復原', ()=>{
+    Object.assign(S, before);
+    exitModes(); syncAll(); setFovSource(fovSrc, fovAuto);
+    flash('已復原到重設前的設定。');
+  });
+});
+
 $('btn-export').addEventListener('click',()=>{
   if(!roomImg||!prodImg) return;
   const out=cvs(roomImg.width,roomImg.height);
