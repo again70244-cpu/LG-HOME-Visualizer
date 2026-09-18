@@ -1224,10 +1224,15 @@ paint();
 window.addEventListener('resize',paint);
 
 /* 離線可用：客戶家裡、地下室、電梯間收訊差時工具照樣能跑。
-   在 file:// 或預覽環境註冊會失敗，忽略即可。 */
+   失敗時要留下原因 —— 靜默吞掉錯誤等於讓問題無法診斷。 */
+window.__sw='未嘗試';
 if('serviceWorker' in navigator && (location.protocol==='https:' || ['localhost','127.0.0.1'].includes(location.hostname))){
+  window.__sw='註冊中…';
   window.addEventListener('load',()=>{
-    navigator.serviceWorker.register('sw.js').catch(()=>{});
+    navigator.serviceWorker.register('sw.js').then(
+      r=>{ window.__sw='已註冊 ✓ scope: '+r.scope; },
+      e=>{ window.__sw='註冊失敗 ✗ '+(e&&e.message); console.warn('[SW] 註冊失敗：',e); }
+    );
   });
 }
 })();

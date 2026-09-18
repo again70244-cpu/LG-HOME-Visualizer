@@ -4,7 +4,7 @@
    - 字體與圖示走「快取優先」，它們不會在同名檔案下改變，沒必要每次都問網路。 */
 const CACHE = 'lgv-2026-09-17';
 const SHELL = [
-  './', './index.html', './app.css', './app.js', './manifest.webmanifest',
+  './', './app.css', './app.js', './manifest.webmanifest',
   './fonts/Archivo.woff2',
   './fonts/IBMPlexMono-400.woff2',
   './fonts/IBMPlexMono-500.woff2',
@@ -14,12 +14,20 @@ const SHELL = [
 ];
 const IMMUTABLE = /\/(fonts|icons)\//;
 
+/* 逐一快取，不用 addAll。addAll 是全有全無的：只要有一個項目回傳轉址
+   （Cloudflare 預設會把 /index.html 轉到 /）或 404，整個安裝就失敗，
+   Service Worker 也就永遠註冊不起來。 */
 self.addEventListener('install', e => {
-  e.waitUntil(
-    caches.open(CACHE)
-      .then(c => c.addAll(SHELL))
-      .then(() => self.skipWaiting())
-  );
+  e.waitUntil((async () => {
+    const c = await caches.open(CACHE);
+    await Promise.all(SHELL.map(async url => {
+      try {
+        const res = await fetch(url, { cache: 'reload' });
+        if (res.ok && !res.redirected) await c.put(url, res);
+      } catch (_) { /* 少一個檔案不該讓離線功能整個報廢 */ }
+    }));
+    await self.skipWaiting();
+  })());
 });
 
 self.addEventListener('activate', e => {
@@ -46,6 +54,6 @@ self.addEventListener('fetch', e => {
     fetch(req).then(res => {
       if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); }
       return res;
-    }).catch(() => caches.match(req).then(hit => hit || caches.match('./index.html')))
+    }).catch(() => caches.match(req).then(hit => hit || caches.match('./')))
   );
 });
