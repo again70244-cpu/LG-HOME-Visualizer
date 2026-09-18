@@ -687,6 +687,9 @@ function updateStatus(g){
    互動
    ============================================================ */
 let drag=null;
+// 指標捕捉在某些狀態下會丟例外，而它發生在 pointerdown 裡，
+// 一丟就會中斷整個互動。捕捉失敗頂多是拖到畫布外會斷，不該讓事件處理器掛掉。
+function capture(e){ try{ view.setPointerCapture(e.pointerId); }catch(_){} }
 function viewPos(e){
   const r=view.getBoundingClientRect();
   return { x:(e.clientX-r.left)/r.width, y:(e.clientY-r.top)/r.height };
@@ -708,7 +711,7 @@ view.addEventListener('pointerdown',e=>{
       if(d<bd){ bd=d; best=i; }
     });
     if(bd < Math.max(26,view.height*0.03)*HIT) drag={type:'vp', idx:best};
-    if(drag){ view.setPointerCapture(e.pointerId); view.classList.add('dragging'); e.preventDefault(); }
+    if(drag){ capture(e); view.classList.add('dragging'); e.preventDefault(); }
     return;
   }
   if(Math.abs(p.y-S.horizonY) < 0.018*HIT){
@@ -720,7 +723,7 @@ view.addEventListener('pointerdown',e=>{
       drag={type:'prod', dx:p.x-S.baseX, dy:p.y-S.baseY};
     }
   }
-  if(drag){ view.setPointerCapture(e.pointerId); view.classList.add('dragging'); e.preventDefault(); }
+  if(drag){ capture(e); view.classList.add('dragging'); e.preventDefault(); }
 });
 view.addEventListener('pointermove',e=>{
   if(!drag) return;
@@ -1221,7 +1224,114 @@ syncCamPresets();
 markChips();
 lightLabel();
 paint();
-window.addEventListener('resize',paint);
+/* ============================================================
+   手機／平板：底部面板 + 步驟分頁 + 雙指縮放
+   ============================================================ */
+const isMobile = () => { try{ return matchMedia('(max-width:860px)').matches; }catch(_){ return false; } };
+const app=document.querySelector('.app'), rail=document.querySelector('.rail'),
+      railScroll=document.querySelector('.rail-scroll'), grip=$('grip');
+const PEEK=74;
+const stops = () => { const h=window.innerHeight; return [PEEK, Math.round(h*0.46), Math.round(h*0.86)]; };
+
+let sheetH=0, snapT=0;
+function setSheet(px,animate){
+  const st=stops();
+  sheetH=clamp(px, st[0], st[2]);
+  document.documentElement.style.setProperty('--sheet', sheetH+'px');
+  if(animate){
+    app.classList.add('snap');
+    clearTimeout(snapT); snapT=setTimeout(()=>app.classList.remove('snap'),240);
+  }
+}
+function snapSheet(){
+  let best=stops()[0];
+  for(const s of stops()) if(Math.abs(s-sheetH)<Math.abs(best-sheetH)) best=s;
+  setSheet(best,true);
+}
+
+const steps=[...document.querySelectorAll('.step')];
+const tabs=[...document.querySelectorAll('.tab')];
+function showStep(i){
+  steps.forEach((s,n)=>s.classList.toggle('cur',n===i));
+  tabs.forEach((t,n)=>{ t.classList.toggle('on',n===i); t.setAttribute('aria-selected',n===i); });
+  if(railScroll) railScroll.scrollTop=0;
+}
+tabs.forEach((t,i)=>t.addEventListener('click',()=>{
+  showStep(i);
+  if(sheetH<=stops()[0]+8) setSheet(stops()[1],true);   // 收合時點分頁順便展開
+}));
+
+// 拖面板把手調整高度，放開時吸附到最近的檔位
+let gd=null;
+if(grip){
+  grip.addEventListener('pointerdown',e=>{
+    if(!isMobile() || e.target.closest('.tab')) return;
+    gd={y:e.clientY,h:sheetH};
+    try{ grip.setPointerCapture(e.pointerId); }catch(_){}
+    e.preventDefault();
+  });
+  grip.addEventListener('pointermove',e=>{ if(gd) setSheet(gd.h+(gd.y-e.clientY),false); });
+  const gEnd=e=>{ if(!gd) return; gd=null;
+    try{ grip.releasePointerCapture(e.pointerId); }catch(_){}
+    snapSheet(); };
+  grip.addEventListener('pointerup',gEnd);
+  grip.addEventListener('pointercancel',gEnd);
+}
+
+/* 雙指縮放。用 CSS transform 縮放顯示中的 canvas，不重繪點陣圖；
+   viewPos() 走 getBoundingClientRect()，而它本來就會把 transform 算進去，
+   所以拖曳商品的座標換算不用改。 */
+let zoom=1, panX=0, panY=0, pinch=null;
+const ptrs=new Map();
+function applyZoom(){
+  view.style.transform = (zoom===1 && !panX && !panY)
+    ? '' : 'translate('+panX+'px,'+panY+'px) scale('+zoom+')';
+  $('zoomout').hidden = zoom<=1.02;
+}
+function clampPan(){
+  const mx=view.offsetWidth*(zoom-1)/2, my=view.offsetHeight*(zoom-1)/2;
+  panX=clamp(panX,-mx,mx); panY=clamp(panY,-my,my);
+}
+view.addEventListener('pointerdown',e=>{
+  ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(ptrs.size===2){
+    drag=null; view.classList.remove('dragging');      // 第二指落下就不是拖曳了
+    const [a,b]=[...ptrs.values()];
+    pinch={d:Math.hypot(a.x-b.x,a.y-b.y),mx:(a.x+b.x)/2,my:(a.y+b.y)/2,z:zoom,px:panX,py:panY};
+  }
+});
+view.addEventListener('pointermove',e=>{
+  if(!ptrs.has(e.pointerId)) return;
+  ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(!pinch || ptrs.size!==2) return;
+  const [a,b]=[...ptrs.values()];
+  const d=Math.hypot(a.x-b.x,a.y-b.y) || 1;
+  zoom=clamp(pinch.z*(d/pinch.d),1,6);
+  panX=pinch.px+((a.x+b.x)/2-pinch.mx);
+  panY=pinch.py+((a.y+b.y)/2-pinch.my);
+  if(zoom<=1.02){ zoom=1; panX=panY=0; }
+  clampPan(); applyZoom();
+  e.preventDefault();
+});
+const pEnd=e=>{ ptrs.delete(e.pointerId); if(ptrs.size<2) pinch=null; };
+view.addEventListener('pointerup',pEnd);
+view.addEventListener('pointercancel',pEnd);
+$('zoomout').addEventListener('click',()=>{ zoom=1; panX=panY=0; applyZoom(); });
+
+function layout(){
+  if(isMobile()){
+    if(!sheetH) showStep(0);
+    setSheet(sheetH || stops()[1], false);
+  }else{
+    document.documentElement.style.removeProperty('--sheet');
+    sheetH=0;
+  }
+  if(zoom!==1){ clampPan(); applyZoom(); }
+  paint();
+}
+window.addEventListener('resize',layout);
+window.addEventListener('orientationchange',()=>setTimeout(layout,250));
+layout();
 
 /* 離線可用：客戶家裡、地下室、電梯間收訊差時工具照樣能跑。
    失敗時要留下原因 —— 靜默吞掉錯誤等於讓問題無法診斷。 */

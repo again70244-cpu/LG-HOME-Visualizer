@@ -248,15 +248,81 @@ input[type=number]:focus,select:focus{outline:2px solid var(--accent);outline-of
   .step-body{gap:14px}
 }
 
+/* 桌面沒有底部面板，這些只在手機／平板生效 */
+.grip{display:none}
+.zoomout{
+  position:absolute;right:18px;bottom:16px;z-index:4;
+  font-family:var(--mono);font-size:11px;letter-spacing:.04em;
+  background:rgba(30,34,39,.94);color:var(--ink);
+  border:1px solid var(--line);border-radius:100px;
+  padding:8px 13px;cursor:pointer;
+}
+.zoomout:active{background:var(--panel-3)}
+
+/* ---------- 手機／平板：畫布佔滿，控制項收進可上拉的底部面板 ---------- */
 @media (max-width:860px){
-  html,body{height:auto}
-  .app{grid-template-columns:1fr;height:auto}
-  .stage-col,.rail{overflow:visible}
-  .stage{min-height:300px}
-  .rail{border-left:0;border-top:1px solid var(--line)}
-  .rail-scroll{overflow-y:visible}
-  .stage{padding:14px}
-  #view{max-height:52vh}
-  .demo-badge{top:20px;left:20px}
+  html,body{height:100%}
+  .app{grid-template-columns:1fr;height:100%;position:relative}
+
+  /* 面板高度由 JS 寫進 --sheet；畫布區讓出同樣高度，
+     所以面板再高也不會蓋住畫布 —— 調整時看得到結果才有意義。
+     這裡改的是 CSS 顯示尺寸，不是 canvas 點陣尺寸，不會觸發重繪。 */
+  /* 頁首在手機上會換行，白白吃掉約 170px 的畫布空間。壓成單行。 */
+  .top{padding:9px 14px;gap:8px;flex-wrap:nowrap}
+  .mark b{font-size:13.5px}
+  .mark span{display:none}
+  .priv{font-size:10.5px;padding:3px 9px 3px 7px;white-space:nowrap;flex:none}
+
+  .stage-col{overflow:hidden;padding-bottom:var(--sheet,46vh)}
+  .stage{padding:10px;min-height:0;overflow:hidden}
+  #view{max-height:100%}
+  .demo-badge{top:14px;left:14px}
+  .flash{left:12px;right:12px;bottom:12px}
+
+  /* 狀態列壓成單行，放不下就橫捲，不再換行吃掉畫布空間 */
+  .status{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .stat{flex:0 0 auto;padding:6px 14px;border-right:1px solid var(--line-soft)}
+  .stat dt{font-size:9px;margin-bottom:1px}
+  .stat dd{font-size:12px}
+
+  .rail{
+    position:fixed;left:0;right:0;bottom:0;z-index:20;
+    height:var(--sheet,46vh);
+    border-left:0;border-top:1px solid var(--line);
+    border-radius:16px 16px 0 0;
+    box-shadow:0 -14px 44px rgba(0,0,0,.55);
+    padding-bottom:env(safe-area-inset-bottom,0px);
+  }
+  .app.snap .rail,.app.snap .stage-col{transition:height .22s cubic-bezier(.22,.7,.3,1),padding-bottom .22s cubic-bezier(.22,.7,.3,1)}
+
+  .grip{
+    display:block;flex:none;padding:7px 0 0;touch-action:none;
+    background:var(--panel);border-radius:16px 16px 0 0;cursor:grab;
+  }
+  .grip-bar{display:block;width:38px;height:4px;margin:0 auto 8px;background:var(--panel-3);border-radius:3px}
+  .tabs{display:grid;grid-template-columns:repeat(5,1fr);gap:2px;padding:0 8px 7px;border-bottom:1px solid var(--line-soft)}
+  .tab{
+    appearance:none;border:0;background:transparent;cursor:pointer;
+    display:flex;flex-direction:column;align-items:center;gap:4px;
+    padding:4px 2px 5px;border-radius:9px;
+    font-family:var(--sans);font-size:10.5px;color:var(--ink-faint);
+  }
+  .tab b{
+    width:21px;height:21px;border-radius:50%;display:grid;place-items:center;
+    font-family:var(--mono);font-size:10.5px;font-weight:600;
+    background:var(--panel-3);color:var(--ink-dim);
+  }
+  .tab.on{color:var(--ink)}
+  .tab.on b{background:var(--accent);color:#fff}
+  .tab:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+
+  .rail-scroll{overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:12px}
+  /* 一次只顯示一個步驟，分頁列負責切換 */
+  .step{display:none;border-bottom:0}
+  .step.cur{display:block}
+  .step-hd{padding-top:12px}
+  .step-n{display:none}            /* 分頁上已經有編號了 */
+  .rail-foot{padding-bottom:10px}
+}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}

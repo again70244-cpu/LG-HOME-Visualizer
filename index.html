@@ -31,6 +31,7 @@
       <span class="demo-badge" id="demoBadge">示範素材</span>
       <canvas id="view" aria-label="合成預覽畫布，可拖曳商品與視平線"></canvas>
       <div class="flash" id="flash" role="status" hidden></div>
+      <button class="zoomout" id="zoomout" type="button" hidden>1:1</button>
     </div>
 
     <dl class="status">
@@ -43,6 +44,16 @@
   </div>
 
   <aside class="rail">
+    <div class="grip" id="grip">
+      <span class="grip-bar"></span>
+      <nav class="tabs" id="tabs" role="tablist">
+        <button class="tab" data-tab="0" type="button"><b>1</b>素材</button>
+        <button class="tab" data-tab="1" type="button"><b>2</b>校正</button>
+        <button class="tab" data-tab="2" type="button"><b>3</b>擺放</button>
+        <button class="tab" data-tab="3" type="button"><b>4</b>光影</button>
+        <button class="tab" data-tab="4" type="button"><b>5</b>輸出</button>
+      </nav>
+    </div>
     <div class="rail-scroll">
 
       <section class="step on">
