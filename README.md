@@ -33,6 +33,18 @@ fonts/ icons/         自架字體與圖示
 Service Worker 需要抓自己的檔案建立離線快取，所以 `_headers` 只對 `/sw.js`
 放行 `connect-src 'self'`；頁面本身仍然是 `'none'`。
 
+### 不要把客戶照片 commit 進來
+
+這個 repo 是公開的，照片一旦進版控就是永久公開，刪檔也還留在 git 歷史裡。
+`.gitignore` 預設擋掉所有影像與影片格式，`icons/` 與 `fonts/` 兩個專案素材
+資料夾例外放行。
+
+副檔名用 `[jJ][pP][gG]` 這種字元類別展開，因為 gitignore 區分大小寫，
+而 iPhone 的檔名預設是大寫（`IMG_1234.HEIC`、`IMG_1234.JPG`、`IMG_1234.MOV`）
+—— 正好是最可能誤入版控的那一種。
+
+需要版控測試素材時用 `git add -f` 個別加入，並先確認那不是真實客戶的家。
+
 ## 部署
 
 靜態託管即可，不需要伺服器端執行環境。

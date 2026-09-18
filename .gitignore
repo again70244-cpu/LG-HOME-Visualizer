@@ -1,0 +1,50 @@
+# 這個 repo 是公開的，而客戶家中照片屬於個人資料。
+# 照片一旦 commit 進來就是永久公開，就算之後刪檔也還留在 git 歷史裡。
+# 所以預設擋掉所有影像與影片格式，專案自己的素材資料夾再放行。
+#
+# 副檔名用 [jJ][pP][gG] 這種字元類別展開，是因為 gitignore 區分大小寫，
+# 而 iPhone 拍出來的檔名預設是大寫（IMG_1234.HEIC、IMG_1234.JPG、IMG_1234.MOV）
+# —— 正好是最可能誤入版控的那一種。
+#
+# 真的需要版控測試素材時用 git add -f 個別加入，
+# 並且先確認那張圖不是真實客戶的家。
+
+# ---- 影像與影片：一律擋（不分大小寫） ----
+*.[jJ][pP][gG]
+*.[jJ][pP][eE][gG]
+*.[pP][nN][gG]
+*.[gG][iI][fF]
+*.[wW][eE][bB][pP]
+*.[bB][mM][pP]
+*.[tT][iI][fF]
+*.[tT][iI][fF][fF]
+*.[hH][eE][iI][cC]
+*.[hH][eE][iI][fF]
+*.[aA][vV][iI][fF]
+*.[pP][sS][dD]
+*.[aA][iI]
+*.[rR][aA][wW]
+*.[dD][nN][gG]
+*.[cC][rR]2
+*.[nN][eE][fF]
+*.[mM][pP]4
+*.[mM][oO][vV]
+*.[mM]4[vV]
+*.[aA][vV][iI]
+*.[pP][dD][fF]
+
+# ---- 專案素材資料夾：放行 ----
+!icons/
+!icons/**
+!fonts/
+!fonts/**
+
+# ---- 系統與編輯器產生的檔案 ----
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*~
+.vscode/
+.idea/
+node_modules/
