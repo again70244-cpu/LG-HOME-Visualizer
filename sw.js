@@ -23,8 +23,11 @@ self.addEventListener('install', e => {
     await Promise.all(SHELL.map(async url => {
       try {
         const res = await fetch(url, { cache: 'reload' });
-        if (res.ok && !res.redirected) await c.put(url, res);
-      } catch (_) { /* 少一個檔案不該讓離線功能整個報廢 */ }
+        if (res.ok && !res.redirected) { await c.put(url, res); return; }
+        console.warn('[SW] 略過', url, res.status, res.redirected ? '(轉址)' : '');
+      } catch (err) {
+        console.warn('[SW] 抓取失敗', url, err && err.message);   // 少一個檔案不該讓離線整組報廢
+      }
     }));
     await self.skipWaiting();
   })());
@@ -44,16 +47,30 @@ self.addEventListener('fetch', e => {
   if (new URL(req.url).origin !== location.origin) return;   // 本來就不該有外部請求
 
   if (IMMUTABLE.test(req.url)) {                              // 快取優先
-    e.respondWith(caches.match(req).then(hit => hit || fetch(req).then(res => {
-      if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); }
-      return res;
-    })));
+    e.respondWith((async () => {
+      const hit = await caches.match(req);
+      if (hit) return hit;
+      try {
+        const res = await fetch(req);
+        if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); }
+        return res;
+      } catch (_) {
+        return new Response('', { status: 503 });
+      }
+    })());
     return;
   }
-  e.respondWith(                                              // 網路優先
-    fetch(req).then(res => {
+  e.respondWith((async () => {                                // 網路優先
+    try {
+      const res = await fetch(req);
       if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); }
       return res;
-    }).catch(() => caches.match(req).then(hit => hit || caches.match('./')))
-  );
+    } catch (_) {
+      // respondWith 收到 undefined 會直接丟 TypeError，所以最後一定要給一個 Response
+      return (await caches.match(req))
+          || (req.mode === 'navigate' ? await caches.match('./') : null)
+          || new Response('離線，且這個檔案尚未快取。', {
+               status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
+    }
+  })());
 });

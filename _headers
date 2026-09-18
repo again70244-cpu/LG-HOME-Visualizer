@@ -1,17 +1,15 @@
-# Cloudflare Pages / Netlify 會讀這個檔案。
-# connect-src 'none' 讓這個頁面在瀏覽器層級「無法」發出任何網路請求 ——
-# 客戶的照片不可能被上傳，這不是承諾而是強制。
+# CSP 不放在這裡，放在 index.html 的 <meta> —— 原因是 _headers 的規則會一併
+# 套用到 sw.js，而多個 CSP 標頭同時存在時是取交集：頁面需要的 connect-src 'none'
+# 和 Service Worker 需要的 connect-src 'self' 交集後等於什麼都不准，
+# 結果就是離線快取永遠建不起來。
+# meta CSP 只作用於文件本身，Service Worker 不受影響，兩邊各自拿到正確的限制。
 /*
-  Content-Security-Policy: default-src 'none'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
   X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
   Referrer-Policy: no-referrer
   Permissions-Policy: geolocation=(), microphone=(), camera=(), payment=(), interest-cohort=()
-  Cross-Origin-Opener-Policy: same-origin
 
-# Service Worker 需要能抓自己的檔案來建立離線快取，
-# 所以它自己的執行環境要放行 connect-src。頁面本身仍然是 'none'。
 /sw.js
-  Content-Security-Policy: default-src 'none'; script-src 'self'; connect-src 'self'
   Cache-Control: no-cache
 
 /fonts/*
