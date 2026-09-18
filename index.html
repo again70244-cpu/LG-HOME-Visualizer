@@ -4,6 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>空間合成工作台</title>
+<!-- CSP 同時寫在這裡和 _headers。_headers 只有部分託管平台會讀，
+     寫在文件裡則跟著檔案走，換平台也一定生效。
+     connect-src 'none' 讓這個頁面在瀏覽器層級無法發出任何網路請求，
+     客戶的照片不可能被上傳 —— 這不是承諾，是強制。 -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="description" content="把去背商品圖以真實比例合成進客戶家中照片。所有影像處理都在本機完成，照片不會上傳。">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#16181b">
