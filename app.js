@@ -18,14 +18,59 @@ const S = {
   shadowDir:205, shadowLen:0.55, shadowSoft:14, shadowOp:0.48,
   refl:0.14,
   harm:0.55, tint:0.22, bright:0, warm:0, trim:1, grain:0.35,
-  scene:'balcony', floor:1, lightPos:null, lightMode:false,
+  scene:'balcony', floor:1, lightPos:null, lightMode:false, autoMirror:true,
   compare:false
 };
 const DEFAULTS = JSON.parse(JSON.stringify(S));
 
 let roomImg=null, prodImg=null;
+/* 多視角：每個角度一張實拍去背圖。角度吻合時直接用實拍像素，
+   不吻合時才用剩餘角度推算側面 —— 推算量越少，保真度越高。 */
+const VIEWS=[];                       // {img,name,angle,demo,trimC,procC,sideC,topTint,ar}
+let curView=null, curAr=0.4, baseAr=0.4, curMirror=false, curResid=0;
 let roomSmall=null, roomSmallData=null;   // 取樣用縮圖
 let trimC=null, procC=null, sideC=null, lastBox=null;
+
+function loadGlobals(v){
+  if(!v) return;
+  curView=v; prodImg=v.img; trimC=v.trimC; procC=v.procC;
+  sideC=v.sideC; topTint=v.topTint||'#8a8f94'; curAr=v.ar||0.4;
+}
+function saveGlobals(v){
+  v.trimC=trimC; v.procC=procC; v.sideC=sideC; v.topTint=topTint;
+  v.ar = trimC ? trimC.width/trimC.height : 0.4;
+}
+/* 每個視角跑一次同一段管線，處理函式本身不用改 —— 只是換掉它讀寫的那組全域變數 */
+function eachView(fn){
+  if(!VIEWS.length) return;
+  const keep=curView;
+  for(const v of VIEWS){ loadGlobals(v); fn(); saveGlobals(v); }
+  // 商品的「真實寬度」只有正面照算得準，側拍照的寬度是被壓縮過的
+  let front=VIEWS[0];
+  for(const v of VIEWS) if(Math.abs(v.angle)<Math.abs(front.angle)) front=v;
+  baseAr=front.ar||0.4;
+  loadGlobals(keep && VIEWS.includes(keep) ? keep : VIEWS[0]);
+}
+function rebuildTrim(){ eachView(trimOne); }
+function rebuildProc(){ eachView(procOne); }
+function buildSide(){ eachView(sideOne); }
+
+/* 挑出最接近目標角度的視角。allowMirror 時，單側照片可以鏡射borrow另一側。 */
+const MIRROR_PENALTY=1.0;
+function pickView(deg){
+  if(!VIEWS.length) return null;
+  let best=null, bd=1e9, mir=false;
+  for(const v of VIEWS){
+    let d=Math.abs(deg-v.angle);
+    if(d<bd){ bd=d; best=v; mir=false; }
+    if(S.autoMirror && Math.abs(v.angle)>2){
+      // 加一點罰分：同樣接近時，實拍永遠贏過鏡射
+      d=Math.abs(deg+v.angle)+MIRROR_PENALTY;
+      if(d<bd){ bd=d; best=v; mir=true; }
+    }
+  }
+  return {v:best, mirror:mir, residual:deg-(mir?-best.angle:best.angle)};
+}
 let usingDemoRoom=true, usingDemoProd=true;
 
 const view = $('view');
@@ -140,7 +185,7 @@ function demoProduct(){
 /* ============================================================
    影像處理管線：原圖 →[邊緣修整]→ trimC →[色調]→ procC → silC / reflC
    ============================================================ */
-function rebuildTrim(){
+function trimOne(){
   if(!prodImg) return;
   const w=prodImg.width, h=prodImg.height;
   trimC=cvs(w,h);
@@ -228,7 +273,7 @@ function regionStats(){
   return {mean,std,my,sy:Math.sqrt(Math.max(1,yq/n-my*my))};
 }
 
-function rebuildProc(){
+function procOne(){
   if(!trimC) return;
   const w=trimC.width, h=trimC.height;
   procC=cvs(w,h);
@@ -278,7 +323,7 @@ function rebuildProc(){
     c.putImageData(d,0,0);
   }
 
-  buildSide();
+  sideOne();
   buildTopTint();
 }
 
@@ -295,7 +340,7 @@ function buildTopTint(){
 
 /* 側面材質：從去背圖靠邊緣的像素欄擠出。
    這樣側面自動帶有商品的真實顏色，以及上下緣的輪廓收邊（圓角、底座）。 */
-function buildSide(){
+function sideOne(){
   if(!procC) return;
   const ph=procC.height, sw=112;
   const inset=Math.max(1,Math.round(procC.width*0.05));
@@ -325,7 +370,7 @@ function geom(k){
   const denom=Math.max(baseY-horizonY, H*0.015);
   const pxPerCm=denom/S.cameraH;
   const drawH=denom*(S.productH/S.cameraH)*S.sizeAdjust;
-  const ar=trimC ? trimC.width/trimC.height : 0.4;
+  const ar=curAr;
   return {W,H,k,horizonY,baseX,baseY,drawH,drawW:drawH*ar,pxPerCm,ar};
 }
 
@@ -410,9 +455,12 @@ function proj(g){
   const z0=f/g.pxPerCm;                           // 商品底部到相機的距離（cm）
   const X0=(g.baseX-cx)*z0/f;
   const sc=S.sizeAdjust;
+  // 側拍照已經帶有一部分深度資訊，需要推算的深度就該相應減少
+  const shown = curView ? Math.min(0.8, Math.abs(Math.sin(curView.angle*Math.PI/180))) : 0;
   return {f,cx,cy,Hc,z0,X0,
-          Ho:S.productH*sc, Wo:S.productH*g.ar*sc, Do:Math.max(1,S.depth)*sc,
-          th:(S.roomAngle+S.rotate)*Math.PI/180, z:z0};
+          Ho:S.productH*sc, Wo:S.productH*g.ar*sc,
+          Do:Math.max(1,S.depth)*(1-shown)*sc,
+          th:curResid*Math.PI/180, z:z0};
 }
 /* s = 沿商品寬度(cm，0為中心)  t = 沿商品深度(cm，0為正面)  h = 離地高度(cm) */
 function P(pr,s,t,h){
@@ -423,6 +471,10 @@ function P(pr,s,t,h){
 }
 
 function buildBox(g){
+  const sel=pickView(S.roomAngle+S.rotate);
+  if(!sel) return null;
+  curMirror=sel.mirror; curResid=sel.residual;
+  loadGlobals(sel.v);
   const pr=proj(g);
   const sgn=pr.th>=0?1:-1, sE=sgn*pr.Wo/2, rot=Math.abs(pr.th)>0.003;
   const pts=[P(pr,-pr.Wo/2,0,0),P(pr,-pr.Wo/2,0,pr.Ho),
@@ -461,7 +513,7 @@ function buildBox(g){
 
   // 側面：在共用邊上位於前面板之後，先畫
   if(rot && sideC){
-    const tex=sideC[sgn>0?1:0], tw=tex.width;
+    const tex=sideC[((sgn>0)!==curMirror)?1:0], tw=tex.width;
     for(let i=0;i<N;i++){
       const ta=i/N, tb=(i+1)/N, tm=(i+0.5)/N;
       const xa=P(pr,sE,pr.Do*ta,0).x, xb=P(pr,sE,pr.Do*tb,0).x;
@@ -479,7 +531,7 @@ function buildBox(g){
     const dw=Math.abs(xb-xa); if(dw<0.02) continue;
     const sm=-pr.Wo/2+pr.Wo*um;
     const lo=P(pr,sm,0,0).y, hi=P(pr,sm,0,pr.Ho).y;
-    x.drawImage(src, (S.flip?1-ub:ua)*sw, 0, sw/N, src.height,
+    x.drawImage(src, ((S.flip!==curMirror)?1-ub:ua)*sw, 0, sw/N, src.height,
                 Math.min(xa,xb)-x0, hi-y0, dw+0.8, lo-hi);
   }
   return {c,x0,y0,w:bw,h:bh};
@@ -670,7 +722,15 @@ function paint(){
 }
 
 function updateStatus(g){
-  $('s-dim').textContent = Math.round(S.productH*g.ar)+' × '+Math.round(S.depth)+' × '+Math.round(S.productH)+' cm';
+  $('s-dim').textContent = Math.round(S.productH*baseAr)+' × '+Math.round(S.depth)+' × '+Math.round(S.productH)+' cm';
+  const sv=$('s-view');
+  if(sv){
+    const r=Math.round(curResid);
+    sv.textContent = !curView ? '—'
+      : (curView.angle>0?'+':'')+curView.angle+'°'+(curMirror?' 鏡射':'')
+        + (Math.abs(r)<1 ? '　實拍' : '　推算 '+(r>0?'+':'')+r+'°');
+    sv.className = Math.abs(r)<1 ? '' : 'warn';
+  }
   $('s-scale').textContent = (g.pxPerCm/g.k).toFixed(2)+' px / cm';
   $('s-px').textContent = Math.round(g.drawH/g.k)+' px（'+Math.round(g.drawH/g.H*100)+'% 畫面高）';
   const dev=Math.round((S.sizeAdjust-1)*100);
@@ -695,7 +755,7 @@ function viewPos(e){
   return { x:(e.clientX-r.left)/r.width, y:(e.clientY-r.top)/r.height };
 }
 view.addEventListener('pointerdown',e=>{
-  if(!roomImg||!prodImg) return;
+  if(!roomImg||!VIEWS.length) return;
   const p=viewPos(e);
   if(S.lightMode){
     S.lightPos={x:clamp(p.x,-0.6,1.6), y:clamp(p.y,-0.6,1.6)};
@@ -828,6 +888,7 @@ $('p-preset').addEventListener('change',e=>{
   $('p-height').value=S.productH; $('p-depth').value=S.depth;
   paint();
 });
+$('c-mirror').addEventListener('change',e=>{ S.autoMirror=e.target.checked; paint(); });
 $('btn-vp').addEventListener('click',e=>{
   S.vpMode=!S.vpMode;
   e.currentTarget.classList.toggle('on',S.vpMode);
@@ -950,6 +1011,7 @@ function syncUI(){
   $('p-height').value=S.productH;
   $('p-depth').value=S.depth;
   $('btn-flip').classList.toggle('on',S.flip);
+  $('c-mirror').checked=S.autoMirror;
   set('c-camh',S.cameraH,'v-camh',S.cameraH+' cm');
   syncCamPresets();
   set('c-horizon',(S.horizonY*100).toFixed(1),'v-horizon',Math.round(S.horizonY*100)+'%');
@@ -1096,11 +1158,68 @@ function applyExif(ex,W,H){
   const via = ex && (ex.model||ex.focal) ? '' : '（用 LINE、微信之類傳過的照片，EXIF 通常會被移除；請用 AirDrop 或雲端硬碟傳原檔）';
   flash('這張照片讀不到鏡頭資訊，請自己選鏡頭：0.5× 按「手機超廣角」，1× 按「手機主鏡」。'+via);
 }
-async function loadProd(file){
+const DEF_ANGLES=[0,35,-35,60,-60,20];
+function demoView(){ return {img:demoProduct(),name:'示範商品',angle:0,demo:true}; }
+
+async function addView(file){
+  if(VIEWS.length>=6){ flash('最多 6 個角度，請先移除一個。'); return; }
   const im=await readFile(file);
-  prodImg=im; usingDemoProd=false;
-  $('nameProd').textContent=file.name;
-  rebuildTrim(); rebuildProc(); refreshBadge(); paint();
+  if(VIEWS.length===1 && VIEWS[0].demo) VIEWS.length=0;   // 第一張真圖取代示範素材
+  const used=VIEWS.map(v=>v.angle);
+  const free=DEF_ANGLES.find(a=>!used.includes(a));
+  VIEWS.push({img:im, name:file.name, angle:free===undefined?0:free, demo:false});
+  usingDemoProd=false;
+  $('nameProd').textContent=VIEWS.length+' 個角度';
+  rebuildTrim(); rebuildProc(); renderViews(); refreshBadge(); paint();
+}
+async function addViews(files){
+  for(const f of files){
+    try{ await addView(f); }catch(err){ flash(err.message); }
+  }
+}
+function removeView(i){
+  VIEWS.splice(i,1);
+  if(!VIEWS.length){ VIEWS.push(demoView()); usingDemoProd=true; $('nameProd').textContent='示範商品'; }
+  else $('nameProd').textContent=VIEWS.length+' 個角度';
+  curView=null;
+  rebuildTrim(); rebuildProc(); renderViews(); refreshBadge(); paint();
+}
+function renderViews(){
+  const box=$('views'); if(!box) return;
+  box.textContent='';
+  VIEWS.forEach((v,i)=>{
+    const row=document.createElement('div'); row.className='vrow';
+
+    const th=cvs(38,38); th.className='vthumb';
+    const src=v.trimC||v.img, c=th.getContext('2d');
+    const s=Math.min(34/src.width, 34/src.height);
+    c.drawImage(src,(38-src.width*s)/2,(38-src.height*s)/2,src.width*s,src.height*s);
+    row.appendChild(th);
+
+    const nm=document.createElement('div'); nm.className='vname';
+    nm.textContent=v.name; nm.title=v.name; row.appendChild(nm);
+
+    const inp=document.createElement('input');
+    inp.type='number'; inp.className='vang'; inp.value=v.angle;
+    inp.min=-85; inp.max=85; inp.step=1;
+    inp.setAttribute('aria-label','這張照片的拍攝角度');
+    inp.addEventListener('input',()=>{
+      const n=parseFloat(inp.value);
+      if(isFinite(n)){ v.angle=clamp(n,-85,85); paint(); }
+    });
+    row.appendChild(inp);
+
+    const d=document.createElement('span'); d.className='vdeg'; d.textContent='°';
+    row.appendChild(d);
+
+    const del=document.createElement('button');
+    del.type='button'; del.className='vdel'; del.textContent='×';
+    del.title='移除這個角度';
+    del.addEventListener('click',()=>removeView(i));
+    row.appendChild(del);
+
+    box.appendChild(row);
+  });
 }
 function refreshBadge(){
   const b=$('demoBadge');
@@ -1112,18 +1231,21 @@ function refreshBadge(){
 function wireDrop(wrapId,inputId,handler){
   const wrap=$(wrapId), input=$(inputId);
   input.addEventListener('change',e=>{
-    const f=e.target.files&&e.target.files[0];
-    if(f) handler(f).catch(err=>flash(err.message));
+    // 先複製成陣列：下面清空 input 會讓這個 FileList 當場變空，
+    // 而 handler 還在 await 中迭代它
+    const fs=[...(e.target.files||[])];
+    if(fs.length) Promise.resolve(handler(fs)).catch(err=>flash(err.message));
+    input.value='';                       // 同一個檔案可以再選一次
   });
   ['dragenter','dragover'].forEach(t=>wrap.addEventListener(t,e=>{e.preventDefault();wrap.classList.add('over');}));
   ['dragleave','drop'].forEach(t=>wrap.addEventListener(t,e=>{e.preventDefault();wrap.classList.remove('over');}));
   wrap.addEventListener('drop',e=>{
-    const f=e.dataTransfer.files&&e.dataTransfer.files[0];
-    if(f) handler(f).catch(err=>flash(err.message));
+    const fs=[...(e.dataTransfer.files||[])];
+    if(fs.length) Promise.resolve(handler(fs)).catch(err=>flash(err.message));
   });
 }
-wireDrop('dropRoom','f-room',loadRoom);
-wireDrop('dropProd','f-prod',loadProd);
+wireDrop('dropRoom','f-room',fs=>loadRoom(fs[0]));
+wireDrop('dropProd','f-prod',addViews);
 
 /* ============================================================
    輸出
@@ -1160,7 +1282,7 @@ $('btn-reset').addEventListener('click',()=>{
 });
 
 $('btn-export').addEventListener('click',()=>{
-  if(!roomImg||!prodImg) return;
+  if(!roomImg||!VIEWS.length) return;
   const out=cvs(roomImg.width,roomImg.height);
   const oc=out.getContext('2d');
   const wasCompare=S.compare; S.compare=false;
@@ -1214,7 +1336,7 @@ document.addEventListener('keydown',e=>{
    啟動：載入示範素材，工具一開就是可操作狀態
    ============================================================ */
 roomImg=demoRoom();
-prodImg=demoProduct();
+VIEWS.push(demoView());
 buildRoomSmall();
 rebuildTrim();
 rebuildProc();
@@ -1223,6 +1345,7 @@ syncUI();
 syncCamPresets();
 markChips();
 lightLabel();
+renderViews();
 paint();
 /* ============================================================
    手機／平板：底部面板 + 步驟分頁 + 雙指縮放

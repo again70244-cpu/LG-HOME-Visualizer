@@ -40,6 +40,7 @@
       <div class="stat"><dt>畫面佔高</dt><dd id="s-px">—</dd></div>
       <div class="stat"><dt>比例偏差</dt><dd id="s-dev">—</dd></div>
           <div class="stat"><dt>牆面基準</dt><dd id="s-room">未校正</dd></div>
+          <div class="stat"><dt>使用角度</dt><dd id="s-view">—</dd></div>
     </dl>
   </div>
 
@@ -63,11 +64,18 @@
             <b>客戶空間照片</b><span id="nameRoom">示範場景</span>
             <input type="file" id="f-room" accept="image/*">
           </label>
+          <div class="views" id="views"></div>
           <label class="drop" id="dropProd">
-            <b>商品去背圖（PNG）</b><span id="nameProd">示範商品</span>
-            <input type="file" id="f-prod" accept="image/*">
+            <b>商品去背圖 · 可放多個角度</b><span id="nameProd">示範商品</span>
+            <input type="file" id="f-prod" accept="image/*" multiple>
           </label>
-          <p class="hint">去背圖請用透明背景 PNG，長邊建議 1500px 以上；邊緣若殘留白邊，用第 5 階段的「邊緣修整」清除。</p>
+          <label class="mirrow">
+            <input type="checkbox" id="c-mirror" checked>
+            <span>自動鏡射：只有單側照片時借用另一側</span>
+          </label>
+          <p class="hint">角度愈齊全愈擬真：<b style="color:var(--ink-dim)">正面 0°、右前 +35°、左前 −35°</b>。
+            轉向角落在哪張實拍角度附近，就直接用那張的像素，不必推算側面 —— 狀態列的「使用角度」會顯示現在是實拍還是推算。
+            看得到商品右側面的照片填正值，左側面填負值。長邊建議 1500px 以上。</p>
         </div>
       </section>
 

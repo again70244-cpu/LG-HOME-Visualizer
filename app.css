@@ -205,6 +205,36 @@ input[type=number]:focus,select:focus{outline:2px solid var(--accent);outline-of
   font-size:10px;letter-spacing:.09em;text-transform:uppercase;
   color:var(--ink-faint);font-family:var(--mono);
 }
+.views{display:flex;flex-direction:column;gap:5px}
+/* 用 grid 明確配欄寬：flex 下 input[type=number] 的內在最小寬度會撐破整列 */
+.vrow{
+  display:grid;grid-template-columns:38px minmax(0,1fr) 52px 8px 24px;
+  align-items:center;gap:7px;overflow:hidden;
+  background:var(--panel-2);border:1px solid var(--line);border-radius:var(--r);
+  padding:5px 7px 5px 5px;
+}
+.vthumb{width:38px;height:38px;flex:none;border-radius:4px;background:var(--panel-3)}
+.vname{
+  min-width:0;font-size:11px;color:var(--ink-dim);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.vang{
+  width:100%;min-width:0;padding:5px 6px;text-align:right;-moz-appearance:textfield;
+  font-family:var(--mono);font-size:12.5px;
+  background:var(--panel-3);color:var(--ink);
+  border:1px solid var(--line);border-radius:5px;
+}
+.vdeg{font-family:var(--mono);font-size:11px;color:var(--ink-faint)}
+.vang::-webkit-outer-spin-button,.vang::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.vdel{
+  width:24px;height:24px;border-radius:5px;cursor:pointer;
+  border:1px solid var(--line);background:transparent;color:var(--ink-faint);
+  font-size:15px;line-height:1;
+}
+.vdel:hover{border-color:var(--accent);color:var(--accent-ink)}
+.mirrow{display:flex;align-items:center;gap:8px;cursor:pointer}
+.mirrow span{font-size:11.5px;color:var(--ink-dim);flex:1}
+.mirrow input{width:16px;height:16px;flex:none;accent-color:var(--accent)}
 .swatches{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
 .sw{
   border:1px solid var(--line);background:var(--panel-2);border-radius:var(--r);
