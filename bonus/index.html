@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>業務獎金</title>
+<!-- 業績與獎金是機密：資料只存在這台裝置的瀏覽器裡。
+     connect-src 'none' 讓頁面在瀏覽器層級無法發出任何網路請求，
+     資料不可能被送出去 —— 跟空間合成工作台同一套保證。 -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="門市檔期業績與業務獎金追蹤。資料只存在本機，不會上傳。">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#f5f4f6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#141217" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="業務獎金">
+<link rel="apple-touch-icon" href="../icons/icon-180.png">
+<link rel="icon" type="image/png" sizes="192x192" href="../icons/icon-192.png">
+<link rel="stylesheet" href="bonus.css">
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <div class="brand">
+      <h1 id="campaignTitle">業務獎金</h1>
+      <small id="campaignDates">尚未設定檔期</small>
+    </div>
+    <div class="priv"><i></i>資料只存在這台裝置</div>
+    <nav class="tabs" role="tablist">
+      <button role="tab" type="button" aria-selected="true" data-view="overview">總覽</button>
+      <button role="tab" type="button" aria-selected="false" data-view="entry">銷售登錄</button>
+      <button role="tab" type="button" aria-selected="false" data-view="report">分享報表</button>
+      <button role="tab" type="button" aria-selected="false" data-view="settings">規則設定</button>
+      <button role="tab" type="button" aria-selected="false" data-view="backup">備份</button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="notice warn" id="backupNag" hidden></div>
+
+  <!-- ========== 總覽 ========== -->
+  <section class="view" id="view-overview">
+    <div class="notice" id="ruleNotice" hidden></div>
+    <div class="kpis">
+      <div class="kpi"><span>全店累計業績</span><strong id="kSales">0</strong></div>
+      <div class="kpi"><span>應發獎金合計</span><strong class="accent" id="kBonus">0</strong></div>
+      <div class="kpi"><span>成交筆數</span><strong id="kCount">0</strong></div>
+      <div class="kpi"><span id="kDaysLbl">檔期剩餘</span><strong id="kDays">–</strong></div>
+    </div>
+    <div class="toolbar"><h2>業務個人進度</h2><span class="hint">依累計業績排序</span></div>
+    <div class="staff-grid" id="staffGrid"></div>
+    <div class="toolbar"><h2>門市指定品項累積</h2><span class="hint">全店台數決定每台獎金，達標後全員適用</span></div>
+    <div class="dz-list" id="dzList"></div>
+  </section>
+
+  <!-- ========== 銷售登錄 ========== -->
+  <section class="view" id="view-entry" hidden>
+    <div class="entry-grid">
+      <form class="panel" id="saleForm" autocomplete="off">
+        <div class="toolbar"><h2 id="formTitle">新增一筆銷售</h2><button class="btn ghost small" type="button" id="cancelEdit" hidden>取消編輯</button></div>
+        <div class="field">
+          <span class="lbl">業務</span>
+          <div class="seg" id="staffSeg"></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label for="fDate">日期</label><input type="date" id="fDate" required></div>
+          <div class="field"><label for="fQty">數量（台）</label><input type="number" id="fQty" min="1" step="1" value="1" required></div>
+        </div>
+        <div class="field">
+          <label for="fModel">LG 型號</label>
+          <input type="text" id="fModel" list="modelList" placeholder="例如 OLED65C5PTA" required>
+          <datalist id="modelList"></datalist>
+        </div>
+        <div class="field">
+          <label for="fCat">指定品項</label>
+          <select id="fCat"></select>
+          <span class="hint" id="catHint">輸入型號後會依關鍵字自動判斷，可手動更改</span>
+        </div>
+        <div class="field">
+          <label for="fAmount">抽成前銷貨金額（此筆合計，元）</label>
+          <input type="number" id="fAmount" class="big" min="0" step="1" inputmode="numeric" placeholder="0" required>
+        </div>
+        <button class="btn" type="submit" id="saveSale">登錄這筆銷售</button>
+        <div class="msg" id="saleMsg" role="status"></div>
+      </form>
+
+      <div class="panel">
+        <div class="toolbar">
+          <h2>銷售明細</h2>
+          <select id="filterStaff" aria-label="篩選業務" class="auto"></select>
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>日期</th><th>業務</th><th>型號</th><th class="r">台</th><th class="r">金額</th><th></th></tr></thead>
+            <tbody id="recBody"></tbody>
+          </table>
+        </div>
+        <div class="msg" id="listMsg" role="status"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== 分享報表 ========== -->
+  <section class="view" id="view-report" hidden>
+    <div class="entry-grid">
+      <div class="panel">
+        <h2>產生給同仁看的報表</h2>
+        <p class="hint">報表是一張圖片，內容是按下按鈕當下的數字。傳到 LINE 群組後，同仁只能看，不能改。</p>
+        <fieldset class="checks">
+          <legend class="lbl">報表內容</legend>
+          <label><input type="checkbox" id="rBonus" checked> 獎金金額</label>
+          <label><input type="checkbox" id="rRate" checked> 獎金率與距下一門檻</label>
+          <label><input type="checkbox" id="rDz" checked> 指定品項累積</label>
+        </fieldset>
+        <div class="btns">
+          <button class="btn" type="button" id="shareImg">分享圖片</button>
+          <button class="btn ghost" type="button" id="saveImg">下載圖片</button>
+          <button class="btn ghost" type="button" id="copyText">複製文字版</button>
+        </div>
+        <div class="msg" id="reportMsg" role="status"></div>
+      </div>
+      <div class="panel preview">
+        <h2>預覽</h2>
+        <img id="reportImg" alt="報表預覽">
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== 規則設定 ========== -->
+  <section class="view" id="view-settings" hidden>
+    <div class="set-grid">
+      <div class="panel">
+        <h2>檔期</h2>
+        <div class="field"><label for="sName">檔期名稱</label><input type="text" id="sName" placeholder="LG 2026 週年慶"></div>
+        <div class="row2">
+          <div class="field"><label for="sStart">開始日</label><input type="date" id="sStart"></div>
+          <div class="field"><label for="sEnd">結束日</label><input type="date" id="sEnd"></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>業務名單</h2>
+        <div class="list-ed" id="staffEd"></div>
+        <div><button class="btn ghost small" type="button" id="addStaff">＋ 新增業務</button></div>
+      </div>
+
+      <div class="panel">
+        <h2>個人獎金門檻</h2>
+        <div class="field">
+          <label for="sMode">計算方式</label>
+          <select id="sMode">
+            <option value="full">達到門檻後，全部業績都用該獎金率</option>
+            <option value="progressive">超額累進，每段只算該段的獎金率</option>
+          </select>
+        </div>
+        <div class="col-lbl tier"><span>累計業績達（元）</span><span>獎金率（%）</span><span></span></div>
+        <div class="list-ed" id="tierEd"></div>
+        <div><button class="btn ghost small" type="button" id="addTier">＋ 新增門檻</button></div>
+      </div>
+
+      <div class="panel">
+        <h2>指定品項台獎</h2>
+        <p class="hint">全店累積台數達到級距後，該品項每台獎金以該級距計算。關鍵字用逗號分隔，登錄時型號包含關鍵字就會自動歸類。</p>
+        <div class="list-ed" id="catEd"></div>
+        <div><button class="btn ghost small" type="button" id="addCat">＋ 新增指定品項</button></div>
+      </div>
+    </div>
+    <div class="save-bar">
+      <button class="btn" type="button" id="saveSettings">儲存規則</button>
+      <button class="btn ghost" type="button" id="resetSettings">放棄修改</button>
+      <span class="msg" id="setMsg" role="status"></span>
+    </div>
+  </section>
+
+  <!-- ========== 備份 ========== -->
+  <section class="view" id="view-backup" hidden>
+    <div class="set-grid">
+      <div class="panel">
+        <h2>備份與還原</h2>
+        <p class="hint">資料只存在這台裝置的瀏覽器裡。清除瀏覽器資料、換手機或換電腦，資料都不會跟過去。請定期下載備份檔，存在自己的電腦或雲端硬碟。</p>
+        <dl class="ledger wide">
+          <dt>銷售紀錄</dt><dd id="bCount">0 筆</dd>
+          <dt>上次備份</dt><dd id="bLast">從未備份</dd>
+          <dt>瀏覽器保護</dt><dd id="bPersist">確認中…</dd>
+        </dl>
+        <div class="btns">
+          <button class="btn" type="button" id="exportJson">下載備份檔</button>
+          <label class="btn ghost file">從備份檔還原<input type="file" id="importJson" accept=".json,application/json"></label>
+          <button class="btn ghost" type="button" id="exportCsv">匯出銷售明細（Excel 可開）</button>
+        </div>
+        <div class="msg" id="backupMsg" role="status"></div>
+        <div class="confirm-box" id="importConfirm" hidden>
+          <p id="importSummary"></p>
+          <div class="btns">
+            <button class="btn" type="button" id="importGo">取代目前資料</button>
+            <button class="btn ghost" type="button" id="importCancel">取消</button>
+          </div>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>換新檔期</h2>
+        <p class="hint">清除所有銷售紀錄，規則與業務名單保留。清除前會先自動下載一份備份。</p>
+        <div class="btns"><button class="btn ghost" type="button" id="clearSales">清除銷售紀錄</button></div>
+        <div class="confirm-box" id="clearConfirm" hidden>
+          <p>確定要清除全部 <b id="clearN">0</b> 筆銷售紀錄嗎？</p>
+          <div class="btns">
+            <button class="btn" type="button" id="clearGo">下載備份並清除</button>
+            <button class="btn ghost" type="button" id="clearCancel">取消</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+<script src="bonus.js"></script>
+</body>
+</html>
