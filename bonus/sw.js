@@ -1,11 +1,11 @@
 /* 業務獎金的離線快取。範圍是 /bonus/，比根目錄的 sw.js 更精確，所以這個資料夾由它負責。
    策略跟根目錄相同：程式本體網路優先（推新版馬上生效），字體與圖示快取優先。
    這裡只快取程式檔案；業績資料在 localStorage，不經過 Service Worker。 */
-const CACHE = 'lg-bonus-2026-10-02';
+const CACHE = 'lg-bonus-2026-10-02b';
 const SHELL = [
   './', './bonus.css', './bonus.js', './manifest.webmanifest',
   '../fonts/Archivo.woff2', '../fonts/IBMPlexMono-500.woff2',
-  '../icons/icon-180.png', '../icons/icon-192.png', '../icons/icon-512.png', '../icons/icon-maskable-512.png'
+  './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png'
 ];
 const IMMUTABLE = /\/(fonts|icons)\//;
 

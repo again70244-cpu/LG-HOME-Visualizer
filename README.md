@@ -15,7 +15,7 @@ manifest.webmanifest  PWA 資訊：名稱、圖示、standalone 顯示
 sw.js                 Service Worker：離線快取
 _headers              CSP 與快取標頭（Cloudflare Pages / Netlify 會讀）
 fonts/ icons/         自架字體與圖示
-bonus/                業務獎金追蹤（獨立頁面，共用字體與圖示）
+bonus/                業務獎金追蹤（獨立頁面，共用字體，有自己的圖示）
 ```
 
 ## 隱私：不是承諾，是強制
