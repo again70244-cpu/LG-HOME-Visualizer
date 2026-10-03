@@ -160,8 +160,30 @@
       </div>
 
       <div class="panel">
+        <h2>冷氣條件</h2>
+        <p class="hint">依每位業務的冷氣銷售台數，決定獎金實際發放的比例。台數可以有小數。</p>
+        <div class="col-lbl tier"><span>冷氣台數達（台）</span><span>發放比例（%）</span><span></span></div>
+        <div class="list-ed" id="acEd"></div>
+        <div><button class="btn ghost small" type="button" id="addAc">＋ 新增級距</button></div>
+      </div>
+
+      <div class="panel">
+        <h2>目標條件</h2>
+        <p class="hint">每個沒有達成的目標，從獎金扣掉設定的比例。是否達成由門市自行確認，在下方「每人條件」勾選。</p>
+        <div class="col-lbl tier"><span>目標名稱</span><span>未達成扣（%）</span><span></span></div>
+        <div class="list-ed" id="condEd"></div>
+        <div><button class="btn ghost small" type="button" id="addCond">＋ 新增目標</button></div>
+      </div>
+
+      <div class="panel">
+        <h2>每人條件</h2>
+        <p class="hint">實領獎金 ＝（個人業績獎金 ＋ 指定品項台獎）× 冷氣發放比例 ×（1 − 未達成目標的扣減合計）。冷氣台數沒填的業務以 0 台計算。</p>
+        <div id="peopleEd"></div>
+      </div>
+
+      <div class="panel">
         <h2>指定品項台獎</h2>
-        <p class="hint">全店累積台數達到級距後，該品項每台獎金以該級距計算。關鍵字用逗號分隔，登錄時型號包含關鍵字就會自動歸類。</p>
+        <p class="hint">全店累積台數達到級距後，該品項所有台數都以該級距的每台獎金計算，每位業務依自己賣的台數領取。登錄時型號符合清單（開頭相同即可）就會自動歸類。</p>
         <div class="list-ed" id="catEd"></div>
         <div><button class="btn ghost small" type="button" id="addCat">＋ 新增指定品項</button></div>
       </div>
@@ -178,7 +200,7 @@
     <div class="set-grid">
       <div class="panel">
         <h2>備份與還原</h2>
-        <p class="hint">資料只存在這台裝置的瀏覽器裡。清除瀏覽器資料、換手機或換電腦，資料都不會跟過去。請定期下載備份檔，存在自己的電腦或雲端硬碟。</p>
+        <p class="hint">「匯入活動規則檔」只會更新規則，業務名單、每人條件與銷售紀錄都會保留。資料只存在這台裝置的瀏覽器裡。清除瀏覽器資料、換手機或換電腦，資料都不會跟過去。請定期下載備份檔，存在自己的電腦或雲端硬碟。</p>
         <dl class="ledger wide">
           <dt>銷售紀錄</dt><dd id="bCount">0 筆</dd>
           <dt>上次備份</dt><dd id="bLast">從未備份</dd>
@@ -188,6 +210,7 @@
           <button class="btn" type="button" id="exportJson">下載備份檔</button>
           <label class="btn ghost file">從備份檔還原<input type="file" id="importJson" accept=".json,application/json"></label>
           <button class="btn ghost" type="button" id="exportCsv">匯出銷售明細（Excel 可開）</button>
+          <label class="btn ghost file">匯入活動規則檔<input type="file" id="importRules" accept=".json,application/json"></label>
         </div>
         <div class="msg" id="backupMsg" role="status"></div>
         <div class="confirm-box" id="importConfirm" hidden>

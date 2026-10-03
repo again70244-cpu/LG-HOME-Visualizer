@@ -4,6 +4,7 @@
 (() => {
   const $ = (id) => document.getElementById(id);
   const fmt = (n) => Math.round(n || 0).toLocaleString("zh-TW");
+  const fmtUnits = (n) => (Math.round((n || 0) * 100) / 100).toLocaleString("zh-TW");
   const pct = (r) => (Math.round(r * 1000) / 10).toFixed(1) + "%";
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const localDate = (d = new Date()) => { const x = new Date(d); x.setMinutes(x.getMinutes() - x.getTimezoneOffset()); return x.toISOString().slice(0, 10); };
@@ -11,16 +12,25 @@
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   const clone = (o) => JSON.parse(JSON.stringify(o));
 
-  const EMPTY = { name: "", start: "", end: "", staff: [], mode: "full", tiers: [], cats: [] };
+  // acTiers：冷氣台數 → 發放比例；conditions：未達成就扣減的目標；people：每位業務的冷氣台數與各目標是否達成。
+  // 三者都空的時候不套用任何折算，行為跟舊版相同。
+  const EMPTY = { name: "", start: "", end: "", staff: [], mode: "full", tiers: [], cats: [], acTiers: [], conditions: [], people: {} };
   const KEY = "lg-bonus-v1";
   const TAB_KEY = "lg-bonus-tab";
   const BACKUP_NAG_DAYS = 7;
 
   /* ---------- 儲存 ---------- */
-  let state = { settings: clone(EMPTY), sales: [], lastBackup: null };
+  // 舊版的指定品項用 keywords（包含比對），新版改成 models（型號開頭比對），讀進來時一併轉換
+  function normalizeSettings(raw) {
+    const s = { ...clone(EMPTY), ...(raw || {}) };
+    s.cats = (s.cats || []).map(({ keywords, ...c }) => ({ ...c, models: c.models || keywords || [] }));
+    s.people = s.people || {};
+    return s;
+  }
+  let state = { settings: normalizeSettings(), sales: [], lastBackup: null };
   try {
     const raw = JSON.parse(localStorage.getItem(KEY));
-    if (raw) state = { settings: { ...EMPTY, ...raw.settings }, sales: raw.sales || [], lastBackup: raw.lastBackup || null };
+    if (raw) state = { settings: normalizeSettings(raw.settings), sales: raw.sales || [], lastBackup: raw.lastBackup || null };
   } catch {}
   const S = () => state.settings;
 
@@ -54,6 +64,24 @@
     return { rate, bonus, next };
   }
 
+  // 型號比對時忽略大小寫、空白與連字號：AB-123CD 打成 ab123cd 也認得
+  const normModel = (m) => String(m || "").toUpperCase().replace(/[\s\-_]/g, "");
+  function catForModel(model) {
+    const m = normModel(model);
+    if (!m) return null;
+    return (S().cats || []).find((c) => (c.models || []).some((k) => normModel(k) && m.startsWith(normModel(k)))) || null;
+  }
+
+  // 冷氣發放比例：取「台數 ≥ 下限」的最高一級，跟 Excel 的 LOOKUP 一樣。沒設定冷氣條件時回傳 null（不折算）。
+  function acRate(units) {
+    const t = [...(S().acTiers || [])].sort((a, b) => a.min - b.min);
+    if (!t.length) return null;
+    let r = 0;
+    for (const x of t) if (units >= x.min) r = x.pct;
+    return r;
+  }
+  const personOf = (name) => (S().people || {})[name] || {};
+
   function catState() {
     const map = {};
     for (const c of S().cats || []) {
@@ -80,7 +108,15 @@
       let dzBonus = 0;
       for (const s of mine) if (s.cat && cs[s.cat]) dzBonus += (s.qty || 0) * cs[s.cat].perUnit;
       const ratio = p.next ? Math.min(1, amount / p.next.threshold) : (tiersSorted().length ? 1 : 0);
-      return { name, amount, count, ...p, ratio, dzBonus, total: p.bonus + dzBonus, active: S().staff.includes(name) };
+      // 實領 = (個人獎金 + 台獎) × 冷氣比例 × (1 − 未達成目標的扣減合計)，對應 Excel 的 D → E → H 欄
+      const subtotal = p.bonus + dzBonus;
+      const who = personOf(name);
+      const ac = Number(who.ac) || 0;
+      const acPct = acRate(ac);
+      const unmet = (S().conditions || []).filter((c) => !(who.met || {})[c.id]);
+      const deduct = unmet.reduce((a, c) => a + (c.deduct || 0), 0);
+      const total = subtotal * (acPct ?? 1) * Math.max(0, 1 - deduct);
+      return { name, amount, count, ...p, ratio, dzBonus, subtotal, ac, acPct, unmet, deduct, total, active: S().staff.includes(name) };
     }).sort((a, b) => b.amount - a.amount);
   }
 
@@ -113,8 +149,9 @@
     const issues = [];
     if (!tiersSorted().length) issues.push("個人獎金門檻");
     if (Object.values(cs).some((c) => c.unset)) issues.push("部分指定品項的每台獎金");
+    if ((S().acTiers || []).length && (S().staff || []).some((n) => personOf(n).ac == null)) issues.push("部分業務的冷氣台數");
     $("ruleNotice").hidden = !issues.length;
-    $("ruleNotice").innerHTML = issues.length ? `<b>規則尚未設定完整：</b>${issues.join("、")}還沒填。這些項目的獎金目前以 0 計算，補上後會自動重算。` : "";
+    $("ruleNotice").innerHTML = issues.length ? `<b>規則尚未設定完整：</b>${issues.join("、")}還沒填，到「規則設定」補上後會自動重算。` : "";
 
     const hasTiers = tiersSorted().length > 0;
     $("staffGrid").innerHTML = !stats.length
@@ -136,7 +173,10 @@
             <dt>成交筆數</dt><dd>${fmt(s.count)}</dd>
             <dt>個人業績獎金</dt><dd>${fmt(s.bonus)}</dd>
             <dt>指定品項台獎</dt><dd>${fmt(s.dzBonus)}</dd>
-            <dt class="total">總獎金</dt><dd class="total">${fmt(s.total)}</dd>
+            ${s.acPct != null || (S().conditions || []).length ? `<dt>小計</dt><dd>${fmt(s.subtotal)}</dd>` : ""}
+            ${s.acPct != null ? `<dt>冷氣 ${fmtUnits(s.ac)} 台</dt><dd>× ${Math.round(s.acPct * 100)}%</dd>` : ""}
+            ${s.unmet.map((c) => `<dt>未達成：${esc(c.name)}</dt><dd>− ${Math.round(c.deduct * 100)}%</dd>`).join("")}
+            <dt class="total">實領獎金</dt><dd class="total">${fmt(s.total)}</dd>
           </dl>
         </article>`;
       }).join("");
@@ -148,6 +188,7 @@
       return `<div class="dz">
         <h3>${esc(c.cat.name)}</h3>
         <div class="units">${fmt(c.units)}<small>台累積</small></div>
+        ${c.cat.opening ? `<div class="hint">含期初 ${fmt(c.cat.opening)} 台未分配給業務：算進全店級距，但沒有人領到這幾台的台獎。</div>` : ""}
         ${steps ? `<div class="steps">${steps}</div>` : `<div class="hint">尚未設定級距</div>`}
         <dl class="ledger">
           <dt>目前每台獎金</dt><dd>${per}</dd>
@@ -204,7 +245,7 @@
     $("saveSale").textContent = "登錄這筆銷售";
     $("cancelEdit").hidden = true;
     $("fModel").value = ""; $("fAmount").value = ""; $("fQty").value = "1"; $("fCat").value = "";
-    $("catHint").textContent = "輸入型號後會依關鍵字自動判斷，可手動更改";
+    $("catHint").textContent = CAT_HINT;
   }
 
   function startEdit(id) {
@@ -225,18 +266,19 @@
     selectedStaff = b.dataset.staff; renderEntry();
   });
 
+  const CAT_HINT = "輸入型號後會依活動型號清單自動判斷，可手動更改";
   $("fModel").addEventListener("input", () => {
-    const m = $("fModel").value.toUpperCase().replace(/\s/g, "");
-    const hit = (S().cats || []).find((c) => (c.keywords || []).some((k) => k && m.includes(k.toUpperCase().replace(/\s/g, ""))));
+    const hit = catForModel($("fModel").value);
     $("fCat").value = hit ? hit.id : "";
-    $("catHint").textContent = hit ? `已自動歸類為「${hit.name}」，可手動更改` : "輸入型號後會依關鍵字自動判斷，可手動更改";
+    $("catHint").textContent = hit ? `已自動歸類為「${hit.name}」，可手動更改` : CAT_HINT;
   });
 
   $("saleForm").addEventListener("submit", (e) => {
     e.preventDefault();
     if (!selectedStaff) return flash("saleMsg", "err", "請先點選是哪位業務的銷售。");
     const amount = Number($("fAmount").value), qty = Number($("fQty").value);
-    if (!(amount > 0) || !(qty >= 1)) return flash("saleMsg", "err", "金額要大於 0，數量至少 1 台。");
+    // 金額可以填 0：用來把期初的指定品項台數補登到個別業務名下，業績不會重複計算
+    if (!(amount >= 0) || $("fAmount").value === "" || !(qty >= 1)) return flash("saleMsg", "err", "請填金額（補登台數可填 0），數量至少 1 台。");
     const fields = { date: $("fDate").value, staff: selectedStaff, model: $("fModel").value.trim(), cat: $("fCat").value || null, amount, qty };
     let text;
     if (editingId) {
@@ -290,7 +332,7 @@
         <div class="cat-head"><input type="text" id="cn-${ci}" data-k="cat-name" data-ci="${ci}" value="${esc(c.name)}" aria-label="品項名稱" placeholder="品項名稱">
           <button class="x" type="button" data-rm="cat" data-ci="${ci}" aria-label="移除品項">✕</button></div>
         <div class="row2">
-          <div class="field"><label for="ck-${ci}">型號關鍵字</label><input type="text" id="ck-${ci}" data-k="cat-kw" data-ci="${ci}" value="${esc((c.keywords || []).join(", "))}" placeholder="例如 OLED"></div>
+          <div class="field"><label for="ck-${ci}">活動型號（逗號分隔，可只填開頭）</label><input type="text" id="ck-${ci}" data-k="cat-kw" data-ci="${ci}" value="${esc((c.models || []).join(", "))}" placeholder="例如 AB-123CD, EF456"></div>
           <div class="field"><label for="co-${ci}">期初台數</label><input type="number" id="co-${ci}" min="0" step="1" data-k="cat-open" data-ci="${ci}" value="${c.opening || 0}"></div>
         </div>
         <div class="col-lbl level"><span>全店累積達（台）</span><span>每台獎金（元，空白＝待設定）</span><span></span></div>
@@ -300,6 +342,34 @@
           <button class="x" type="button" data-rm="lv" data-ci="${ci}" data-li="${li}" aria-label="移除級距">✕</button></div>`).join("")}</div>
         <div><button class="btn ghost small" type="button" data-addlv="${ci}">＋ 新增級距</button></div>
       </div>`).join("") || `<span class="hint">尚無指定品項</span>`;
+    $("acEd").innerHTML = (draft.acTiers || []).map((t, i) => `<div class="li tier">
+        <input type="number" id="am-${i}" min="0" step="0.01" data-k="ac-min" data-i="${i}" value="${t.min ?? ""}" aria-label="冷氣台數下限">
+        <input type="number" id="ap-${i}" min="0" max="100" step="1" data-k="ac-pct" data-i="${i}" value="${t.pct != null ? Math.round(t.pct * 100) : ""}" aria-label="發放比例">
+        <button class="x" type="button" data-rm="ac" data-i="${i}" aria-label="移除">✕</button></div>`).join("") || `<span class="hint">未設定，獎金不依冷氣台數折算</span>`;
+    $("condEd").innerHTML = (draft.conditions || []).map((c, i) => `<div class="li tier">
+        <input type="text" id="cdn-${i}" data-k="cond-name" data-i="${i}" value="${esc(c.name)}" aria-label="目標名稱" placeholder="例如 門市銷貨目標">
+        <input type="number" id="cdd-${i}" min="0" max="100" step="1" data-k="cond-ded" data-i="${i}" value="${c.deduct != null ? Math.round(c.deduct * 100) : ""}" aria-label="未達成扣減">
+        <button class="x" type="button" data-rm="cond" data-i="${i}" aria-label="移除">✕</button></div>`).join("") || `<span class="hint">未設定</span>`;
+    renderPeopleEditor();
+  }
+
+  const personDraft = (name) => ((draft.people ||= {})[name] ||= {});
+
+  function renderPeopleEditor() {
+    const conds = draft.conditions || [];
+    const hasAc = (draft.acTiers || []).length > 0;
+    const names = draft.staff.map((n) => n.trim()).filter(Boolean);
+    $("peopleEd").innerHTML = !names.length ? `<span class="hint">先在上面新增業務名單</span>`
+      : !hasAc && !conds.length ? `<span class="hint">還沒有設定冷氣條件或目標條件</span>`
+      : `<div class="tbl-wrap"><table>
+        <thead><tr><th>業務</th>${hasAc ? "<th>冷氣台數</th>" : ""}${conds.map((c) => `<th>${esc(c.name || "未命名")}已達成</th>`).join("")}</tr></thead>
+        <tbody>${names.map((n, i) => {
+          const p = (draft.people || {})[n] || {};
+          return `<tr><td>${esc(n)}</td>
+            ${hasAc ? `<td><input type="number" class="ac-in" id="pac-${i}" min="0" step="0.01" data-k="p-ac" data-name="${esc(n)}" value="${p.ac ?? ""}" aria-label="${esc(n)} 冷氣台數" placeholder="未填"></td>` : ""}
+            ${conds.map((c, j) => `<td><input type="checkbox" class="met-in" id="pm-${i}-${j}" data-k="p-met" data-name="${esc(n)}" data-cond="${esc(c.id)}" ${(p.met || {})[c.id] ? "checked" : ""} aria-label="${esc(n)} ${esc(c.name)}已達成"></td>`).join("")}
+          </tr>`;
+        }).join("")}</tbody></table></div>`;
   }
 
   $("view-settings").addEventListener("input", (e) => {
@@ -315,18 +385,29 @@
     else if (k === "tier-th") draft.tiers[i].threshold = num ?? 0;
     else if (k === "tier-rate") draft.tiers[i].rate = num == null ? 0 : num / 100;
     else if (k === "cat-name") draft.cats[ci].name = t.value;
-    else if (k === "cat-kw") draft.cats[ci].keywords = t.value.split(/[,，、]/).map((s) => s.trim()).filter(Boolean);
+    else if (k === "cat-kw") draft.cats[ci].models = t.value.split(/[,，、\s]+/).map((s) => s.trim()).filter(Boolean);
+    else if (k === "ac-min") draft.acTiers[i].min = num ?? 0;
+    else if (k === "ac-pct") draft.acTiers[i].pct = num == null ? 0 : num / 100;
+    else if (k === "cond-name") draft.conditions[i].name = t.value;
+    else if (k === "cond-ded") draft.conditions[i].deduct = num == null ? 0 : num / 100;
+    else if (k === "p-ac") personDraft(t.dataset.name).ac = num;
+    else if (k === "p-met") (personDraft(t.dataset.name).met ||= {})[t.dataset.cond] = t.checked;
     else if (k === "cat-open") draft.cats[ci].opening = num ?? 0;
     else if (k === "lv-u") draft.cats[ci].levels[li].units = num ?? 0;
     else if (k === "lv-p") draft.cats[ci].levels[li].perUnit = num;
     else return;
+    if (k === "staff" || k === "cond-name") renderPeopleEditor();
     markDirty();
   });
   $("view-settings").addEventListener("click", (e) => {
     const t = e.target.closest("button"); if (!t || !draft) return;
     if (t.id === "addStaff") draft.staff.push("");
     else if (t.id === "addTier") draft.tiers.push({ threshold: 0, rate: 0 });
-    else if (t.id === "addCat") draft.cats.push({ id: "c" + uid(), name: "", keywords: [], opening: 0, levels: [] });
+    else if (t.id === "addCat") draft.cats.push({ id: "c" + uid(), name: "", models: [], opening: 0, levels: [] });
+    else if (t.id === "addAc") draft.acTiers.push({ min: 0, pct: 0 });
+    else if (t.id === "addCond") draft.conditions.push({ id: "k" + uid(), name: "", deduct: 0.1 });
+    else if (t.dataset.rm === "ac") draft.acTiers.splice(+t.dataset.i, 1);
+    else if (t.dataset.rm === "cond") draft.conditions.splice(+t.dataset.i, 1);
     else if (t.dataset.addlv != null) draft.cats[+t.dataset.addlv].levels.push({ units: 0, perUnit: null });
     else if (t.dataset.rm === "staff") draft.staff.splice(+t.dataset.i, 1);
     else if (t.dataset.rm === "tier") draft.tiers.splice(+t.dataset.i, 1);
@@ -342,6 +423,8 @@
     s.staff = [...new Set(s.staff.map((n) => n.trim()).filter(Boolean))];
     s.tiers = s.tiers.filter((t) => t.threshold > 0).sort((a, b) => a.threshold - b.threshold);
     s.cats = s.cats.filter((c) => c.name.trim()).map((c) => ({ ...c, name: c.name.trim(), levels: c.levels.filter((l) => l.units > 0).sort((a, b) => a.units - b.units) }));
+    s.acTiers = (s.acTiers || []).sort((a, b) => a.min - b.min);
+    s.conditions = (s.conditions || []).filter((c) => c.name.trim()).map((c) => ({ ...c, name: c.name.trim() }));
     state.settings = s;
     if (commit()) { loadDraft(); flash("setMsg", "ok", "規則已儲存，總覽已重新計算。"); }
   });
@@ -410,7 +493,7 @@
       const rightX = W - P;
       if (o.bonus) {
         g.fillStyle = C.accent; g.fillText(fmt(s.total), rightX, top + 40);
-        g.fillStyle = C.muted; g.font = F(500, 18); g.fillText("總獎金", rightX, top + 66);
+        g.fillStyle = C.muted; g.font = F(500, 18); g.fillText("實領獎金", rightX, top + 66);
       }
       const salesX = o.bonus ? rightX - 220 : rightX;
       g.fillStyle = C.ink; g.font = F(700, 32); g.fillText(fmt(s.amount), salesX, top + 40);
@@ -533,12 +616,38 @@
   $("importCancel").addEventListener("click", () => { pendingImport = null; $("importConfirm").hidden = true; });
   $("importGo").addEventListener("click", () => {
     if (!pendingImport) return;
-    state.settings = { ...EMPTY, ...pendingImport.settings };
+    state.settings = normalizeSettings(pendingImport.settings);
     state.sales = pendingImport.sales;
     state.lastBackup = Date.now();   // 剛從備份檔還原，等於已有備份
     pendingImport = null; $("importConfirm").hidden = true;
     draft = null; resetForm();
     if (commit()) flash("backupMsg", "ok", "已還原。");
+  });
+
+  /* 活動規則檔：只換規則（檔期、門檻、指定品項、冷氣與目標條件），
+     業務名單、每人條件、銷售紀錄都保留。品項依 id 對應，原本的期初台數會留著。 */
+  $("importRules").addEventListener("change", async (e) => {
+    const f = e.target.files?.[0]; e.target.value = "";
+    if (!f) return;
+    let r;
+    try {
+      r = JSON.parse(await f.text());
+      if (r.app !== "lg-bonus-rules" || !Array.isArray(r.tiers) || !Array.isArray(r.cats)) throw new Error();
+    } catch { return flash("backupMsg", "err", "這不是活動規則檔，或檔案已損壞。"); }
+    const old = S();
+    const oldCats = Object.fromEntries((old.cats || []).map((c) => [c.id, c]));
+    state.settings = normalizeSettings({
+      ...old,
+      name: r.name ?? old.name, start: r.start ?? old.start, end: r.end ?? old.end,
+      mode: r.mode || "full", tiers: r.tiers,
+      cats: r.cats.map((c) => ({ ...c, opening: oldCats[c.id]?.opening || 0 })),
+      acTiers: r.acTiers || [],
+      conditions: r.conditions || [],
+    });
+    // 已經登錄的銷售依新的型號清單重新歸類；清單裡找不到的保持原本的手動分類
+    for (const s of state.sales) { if (s.kind === "opening") continue; const hit = catForModel(s.model); if (hit) s.cat = hit.id; }
+    draft = null; dirty = false;
+    if (commit()) flash("backupMsg", "ok", `已套用「${r.name || f.name}」的規則。請到「規則設定」填每位業務的冷氣台數與目標達成狀況。`);
   });
 
   $("exportCsv").addEventListener("click", () => {
@@ -580,7 +689,7 @@
   // 另一個分頁改了資料時同步過來，避免兩個分頁互相覆蓋
   window.addEventListener("storage", (e) => {
     if (e.key !== KEY || !e.newValue) return;
-    try { const raw = JSON.parse(e.newValue); state = { settings: { ...EMPTY, ...raw.settings }, sales: raw.sales || [], lastBackup: raw.lastBackup || null }; } catch { return; }
+    try { const raw = JSON.parse(e.newValue); state = { settings: normalizeSettings(raw.settings), sales: raw.sales || [], lastBackup: raw.lastBackup || null }; } catch { return; }
     if (!dirty) draft = null;
     renderAll();
   });
