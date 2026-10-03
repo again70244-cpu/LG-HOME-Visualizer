@@ -158,6 +158,8 @@ td .tag.open { background: var(--track); color: var(--muted); }
 .col-lbl { display: grid; gap: 8px; font-size: 12px; color: var(--muted); font-weight: 700; }
 .col-lbl.tier { grid-template-columns: minmax(0, 1fr) minmax(0, 120px) 34px; }
 .col-lbl.level { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 34px; }
+.ac-in { width: 110px !important; }
+.met-in { width: 20px; height: 20px; accent-color: var(--accent); }
 .x { border: 1px solid var(--line); background: var(--bg); width: 34px; height: 40px; border-radius: 8px; cursor: pointer; color: var(--muted); }
 .x:hover { color: var(--accent); }
 .save-bar { position: sticky; bottom: 0; background: var(--bg); padding-block: 12px calc(12px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--line); display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
