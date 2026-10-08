@@ -239,39 +239,6 @@
         <div class="step-body">
           <button class="btn wide" id="btn-compare" type="button">按住比對原圖</button>
 
-          <div class="grp">
-            <span class="grp-t">AI 擬真融合 · 選用</span>
-            <div class="swatches" style="grid-template-columns:repeat(3,1fr)">
-              <button class="sw" data-ai="light" type="button">只調光影</button>
-              <button class="sw" data-ai="real" type="button">加強擬真</button>
-              <button class="sw" data-ai="free" type="button">自由重繪</button>
-            </div>
-            <button class="btn primary wide" id="btn-ai" type="button">用 AI 融合這張圖</button>
-            <p class="hint" id="ai-state">尚未設定金鑰。</p>
-            <button class="btn wide sm" id="btn-ai-setup" type="button">AI 設定</button>
-            <div id="ai-cfg" hidden>
-              <label class="fld">
-                <div class="fld-top"><span>Google AI Studio API 金鑰</span></div>
-                <input type="password" id="ai-key" autocomplete="off" placeholder="貼上金鑰">
-              </label>
-              <label class="fld">
-                <div class="fld-top"><span>模型名稱</span></div>
-                <input type="text" id="ai-model" autocomplete="off">
-              </label>
-              <label class="fld">
-                <div class="fld-top"><span>給 AI 的指示</span></div>
-                <textarea id="ai-prompt" rows="5"></textarea>
-              </label>
-              <button class="btn wide sm" id="btn-ai-clear" type="button">清除金鑰</button>
-              <p class="hint">
-                <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">
-                  開啟 Google AI Studio 申請金鑰（免費）↗</a><br>
-                登入 Google → 按「Create API key」→ 複製 → 貼到上面那一欄，就完成了。<br>
-                金鑰只存在這台裝置的瀏覽器，不會進入程式碼、也不會傳給我們。
-                模型會改版，Google 換名字時改模型那一欄即可。
-                AI 回傳的解析度通常低於原始照片（約 1024–1536px）。</p>
-            </div>
-          </div>
         </div>
       </section>
     </div>
@@ -288,7 +255,6 @@
   <img id="sheet-img" alt="合成結果，原始解析度">
   <p id="sheet-msg"></p>
   <div class="row">
-    <button class="btn" id="btn-sheet-src" type="button" hidden>看合成圖</button>
     <button class="btn primary" id="btn-share" type="button" hidden>分享／存到相簿</button>
     <button class="btn" id="btn-dl" type="button" hidden>下載 PNG</button>
     <button class="btn" id="btn-close" type="button">關閉</button>

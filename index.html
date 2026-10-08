@@ -6,9 +6,9 @@
 <title>空間合成工作台</title>
 <!-- CSP 同時寫在這裡和 _headers。_headers 只有部分託管平台會讀，
      寫在文件裡則跟著檔案走，換平台也一定生效。
-     connect-src 只開放 Google 的生成式 API 這一個端點，是 AI 融合功能唯一的出口。
-     其他任何目的地在瀏覽器層級都連不出去；沒有設定金鑰時，連這個出口也不會被用到。 -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; connect-src https://generativelanguage.googleapis.com; base-uri 'none'; form-action 'none'">
+     connect-src 'none' 讓這個頁面在瀏覽器層級無法發出任何網路請求，
+     客戶的照片不可能被上傳 —— 這不是承諾，是強制。 -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="description" content="把去背商品圖以真實比例合成進客戶家中照片。所有影像處理都在本機完成，照片不會上傳。">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#16181b">
@@ -259,39 +259,6 @@
         <div class="step-body">
           <button class="btn wide" id="btn-compare" type="button">按住比對原圖</button>
 
-          <div class="grp">
-            <span class="grp-t">AI 擬真融合 · 選用</span>
-            <div class="swatches" style="grid-template-columns:repeat(3,1fr)">
-              <button class="sw" data-ai="light" type="button">只調光影</button>
-              <button class="sw" data-ai="real" type="button">加強擬真</button>
-              <button class="sw" data-ai="free" type="button">自由重繪</button>
-            </div>
-            <button class="btn primary wide" id="btn-ai" type="button">用 AI 融合這張圖</button>
-            <p class="hint" id="ai-state">尚未設定金鑰。</p>
-            <button class="btn wide sm" id="btn-ai-setup" type="button">AI 設定</button>
-            <div id="ai-cfg" hidden>
-              <label class="fld">
-                <div class="fld-top"><span>Google AI Studio API 金鑰</span></div>
-                <input type="password" id="ai-key" autocomplete="off" placeholder="貼上金鑰">
-              </label>
-              <label class="fld">
-                <div class="fld-top"><span>模型名稱</span></div>
-                <input type="text" id="ai-model" autocomplete="off">
-              </label>
-              <label class="fld">
-                <div class="fld-top"><span>給 AI 的指示</span></div>
-                <textarea id="ai-prompt" rows="5"></textarea>
-              </label>
-              <button class="btn wide sm" id="btn-ai-clear" type="button">清除金鑰</button>
-              <p class="hint">
-                <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">
-                  開啟 Google AI Studio 申請金鑰（免費）↗</a><br>
-                登入 Google → 按「Create API key」→ 複製 → 貼到上面那一欄，就完成了。<br>
-                金鑰只存在這台裝置的瀏覽器，不會進入程式碼、也不會傳給我們。
-                模型會改版，Google 換名字時改模型那一欄即可。
-                AI 回傳的解析度通常低於原始照片（約 1024–1536px）。</p>
-            </div>
-          </div>
         </div>
       </section>
     </div>
@@ -308,7 +275,6 @@
   <img id="sheet-img" alt="合成結果，原始解析度">
   <p id="sheet-msg"></p>
   <div class="row">
-    <button class="btn" id="btn-sheet-src" type="button" hidden>看合成圖</button>
     <button class="btn primary" id="btn-share" type="button" hidden>分享／存到相簿</button>
     <button class="btn" id="btn-dl" type="button" hidden>下載 PNG</button>
     <button class="btn" id="btn-close" type="button">關閉</button>
