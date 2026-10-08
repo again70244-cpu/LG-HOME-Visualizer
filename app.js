@@ -1347,10 +1347,20 @@ async function runAI(){
     const j=await res.json().catch(()=>null);
     if(!res.ok){
       const msg=(j&&j.error&&j.error.message)||('HTTP '+res.status);
-      throw new Error(res.status===429 ? '已達免費額度上限，請稍後再試。（'+msg+'）'
-                    : res.status===400 && /model/i.test(msg) ? '模型名稱可能不正確，請在 AI 設定裡改。（'+msg+'）'
-                    : res.status===403 ? '金鑰被拒絕，請確認金鑰正確且已啟用。（'+msg+'）'
-                    : msg);
+      const brief=msg.length>150 ? msg.slice(0,150)+'…' : msg;      // 原文會長到洗版
+      // limit: 0 不是「用完了」，是這個模型根本沒有免費額度 —— 叫使用者稍後再試是誤導
+      const noFreeTier = /limit:\s*0\b/.test(msg) || /free_tier/.test(msg);
+      throw new Error(
+          res.status===429 && noFreeTier
+            ? '這個模型沒有免費額度（訊息裡的 limit: 0 就是這個意思），再等也不會恢復。'
+            + '需要在 Google Cloud 專案啟用計費，或改用其他方案。'
+        : res.status===429
+            ? '已達今日用量上限，請稍後再試。（'+brief+'）'
+        : res.status===400 && /model/i.test(msg)
+            ? '模型名稱可能不正確，請在 AI 設定裡改。（'+brief+'）'
+        : res.status===403
+            ? '金鑰被拒絕，請確認金鑰正確且已啟用。（'+brief+'）'
+        : brief);
     }
     const parts=(((j||{}).candidates||[])[0]||{}).content&&j.candidates[0].content.parts||[];
     const img=parts.find(p=>p.inlineData&&p.inlineData.data)||parts.find(p=>p.inline_data&&p.inline_data.data);
