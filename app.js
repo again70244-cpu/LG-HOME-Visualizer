@@ -1305,6 +1305,8 @@ function aiState(){
     ? '<i style="background:var(--warn)"></i>AI 融合已啟用 · 按下時才上傳'
     : '<i></i>影像僅在本機處理，不會上傳';
   document.querySelectorAll('[data-ai]').forEach(b=>b.classList.toggle('on',b.dataset.ai===aiMode));
+  // 沒金鑰時按鈕不該假裝自己能用
+  if(!aiBusy) $('btn-ai').textContent = has ? '用 AI 融合這張圖' : '先設定 AI 金鑰（免費，約 2 分鐘）';
 }
 function setAiMode(m){ aiMode=m; $('ai-prompt').value=AI_PROMPTS[m]; aiState(); }
 
