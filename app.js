@@ -889,6 +889,19 @@ $('p-preset').addEventListener('change',e=>{
   paint();
 });
 $('c-mirror').addEventListener('change',e=>{ S.autoMirror=e.target.checked; paint(); });
+document.querySelectorAll('[data-ai]').forEach(b=>b.addEventListener('click',()=>setAiMode(b.dataset.ai)));
+$('btn-ai').addEventListener('click',runAI);
+$('btn-ai-setup').addEventListener('click',e=>{
+  const c=$('ai-cfg'); c.hidden=!c.hidden;
+  e.currentTarget.classList.toggle('on',!c.hidden);
+  e.currentTarget.textContent=c.hidden?'AI 設定':'收起 AI 設定';
+});
+$('ai-key').addEventListener('input',()=>{ lsSet('lgv.aiKey',aiKey()); aiState(); });
+$('ai-model').addEventListener('input',()=>lsSet('lgv.aiModel',$('ai-model').value.trim()));
+$('btn-ai-clear').addEventListener('click',()=>{
+  $('ai-key').value=''; lsSet('lgv.aiKey',''); aiResult=null; aiState();
+  flash('金鑰已從這台裝置清除。');
+});
 $('btn-vp').addEventListener('click',e=>{
   S.vpMode=!S.vpMode;
   e.currentTarget.classList.toggle('on',S.vpMode);
@@ -1248,6 +1261,109 @@ wireDrop('dropRoom','f-room',fs=>loadRoom(fs[0]));
 wireDrop('dropProd','f-prod',addViews);
 
 /* ============================================================
+   AI 擬真融合（選用）
+
+   設計取捨：不架後端。金鑰存在使用者自己的瀏覽器，前端直接呼叫 —— 金鑰
+   因此永遠不會進入程式碼或我們的伺服器。代價是每個人要自備金鑰。
+   CSP 的 connect-src 只開放這一個端點，所以就算程式被改壞，也只能連到這裡。
+
+   送出的是「已經算好幾何」的合成圖，不是空房間：比例、位置、透視、商品像素
+   都已經正確，AI 只需要處理光影融合。結構先固定住，模型能亂改的空間就小很多。
+   ============================================================ */
+const AI_HOST='https://generativelanguage.googleapis.com';
+const AI_DEFAULT_MODEL='gemini-2.5-flash-image';
+const AI_PROMPTS={
+  light:'This image is a composite: a product photo has been placed into a real room photo. '
+      + 'Keep the product EXACTLY as it is — same shape, size, position, colour, materials and every design detail. '
+      + 'Keep the room exactly as it is. Only make the product sit in the room believably: match the room\'s light '
+      + 'direction and colour temperature on the product, blend its outline naturally, and add a realistic contact '
+      + 'shadow and ambient occlusion where it meets the floor. Change nothing else. Photorealistic result.',
+  real: 'This image is a composite: a product photo has been placed into a real room photo. '
+      + 'Make it look like a real photograph taken in that room. Keep the product in the SAME position, size and '
+      + 'proportion, and keep its overall form, colour and layout recognisable. You may relight it, refine its '
+      + 'materials and reflections, and add realistic shadows and ambient occlusion so it belongs in the scene. '
+      + 'Do not move or resize it and do not change the room. Photorealistic result.',
+  free: 'This image is a composite: a product photo has been placed into a real room photo. '
+      + 'Redraw the product as a photorealistic appliance of the same type, keeping its position, size, proportion '
+      + 'and general design language, fully relit and integrated into the room with correct perspective, shadows '
+      + 'and reflections. Keep the room itself unchanged. Photorealistic result.'
+};
+let aiResult=null, aiBusy=false, aiMode='light';
+
+const lsGet=k=>{ try{ return localStorage.getItem(k)||''; }catch(_){ return ''; } };
+const lsSet=(k,v)=>{ try{ v?localStorage.setItem(k,v):localStorage.removeItem(k); }catch(_){} };
+
+function aiKey(){ return $('ai-key').value.trim(); }
+function aiState(){
+  const has=!!aiKey();
+  $('ai-state').textContent = has
+    ? 'AI 融合已啟用。按下按鈕時，合成圖會上傳到 Google；其餘功能完全不連外。'
+    : '尚未設定金鑰 —— 不會發出任何連線。設定後才會在你按下按鈕時上傳合成圖。';
+  $('ai-state').style.color = has ? 'var(--warn)' : 'var(--ink-faint)';
+  const pr=document.querySelector('.priv');
+  if(pr) pr.innerHTML = has
+    ? '<i style="background:var(--warn)"></i>AI 融合已啟用 · 按下時才上傳'
+    : '<i></i>影像僅在本機處理，不會上傳';
+  document.querySelectorAll('[data-ai]').forEach(b=>b.classList.toggle('on',b.dataset.ai===aiMode));
+}
+function setAiMode(m){ aiMode=m; $('ai-prompt').value=AI_PROMPTS[m]; aiState(); }
+
+/* 把合成圖縮到模型吃得下的尺寸再送，省流量也省時間 */
+function compositeForAI(max){
+  const k=Math.min(1, max/Math.max(roomImg.width,roomImg.height));
+  const out=cvs(roomImg.width*k, roomImg.height*k);
+  const was=S.compare; S.compare=false;
+  render(out.getContext('2d'), k, false);
+  S.compare=was;
+  return out;
+}
+
+async function runAI(){
+  if(aiBusy) return;
+  const key=aiKey();
+  if(!key){ $('ai-cfg').hidden=false; flash('請先設定 Google AI Studio 的 API 金鑰。'); return; }
+  if(!roomImg||!VIEWS.length){ flash('請先載入照片與商品圖。'); return; }
+  const btn=$('btn-ai');
+  aiBusy=true; btn.setAttribute('aria-busy','true'); btn.textContent='AI 處理中…（約 10–30 秒）';
+  try{
+    // 送 JPEG 不送 PNG：合成圖沒有透明區，PNG 會是三倍以上的大小，
+    // 業務在外面用行動網路時差很多
+    const src=compositeForAI(1280);
+    const b64=src.toDataURL('image/jpeg',0.92).split(',')[1];
+    const model=($('ai-model').value.trim()||AI_DEFAULT_MODEL);
+    const res=await fetch(AI_HOST+'/v1beta/models/'+encodeURIComponent(model)+':generateContent',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-goog-api-key':key},
+      body:JSON.stringify({
+        contents:[{parts:[
+          {inline_data:{mime_type:'image/jpeg',data:b64}},
+          {text:$('ai-prompt').value.trim()||AI_PROMPTS[aiMode]}
+        ]}],
+        generationConfig:{responseModalities:['IMAGE']}
+      })
+    });
+    const j=await res.json().catch(()=>null);
+    if(!res.ok){
+      const msg=(j&&j.error&&j.error.message)||('HTTP '+res.status);
+      throw new Error(res.status===429 ? '已達免費額度上限，請稍後再試。（'+msg+'）'
+                    : res.status===400 && /model/i.test(msg) ? '模型名稱可能不正確，請在 AI 設定裡改。（'+msg+'）'
+                    : res.status===403 ? '金鑰被拒絕，請確認金鑰正確且已啟用。（'+msg+'）'
+                    : msg);
+    }
+    const parts=(((j||{}).candidates||[])[0]||{}).content&&j.candidates[0].content.parts||[];
+    const img=parts.find(p=>p.inlineData&&p.inlineData.data)||parts.find(p=>p.inline_data&&p.inline_data.data);
+    if(!img) throw new Error('模型沒有回傳圖片。可能是指示語被判定為不適合，換一個模式再試。');
+    const d=(img.inlineData||img.inline_data);
+    aiResult='data:'+((d.mimeType||d.mime_type)||'image/png')+';base64,'+d.data;
+    openSheet(true);
+  }catch(err){
+    flash('AI 融合失敗：'+(err&&err.message||err));
+  }finally{
+    aiBusy=false; btn.removeAttribute('aria-busy'); btn.textContent='用 AI 融合這張圖';
+  }
+}
+
+/* ============================================================
    輸出
    ============================================================ */
 const inFrame = (()=>{ try{ return window.self!==window.top; }catch(_){ return true; } })();
@@ -1281,31 +1397,53 @@ $('btn-reset').addEventListener('click',()=>{
   });
 });
 
-$('btn-export').addEventListener('click',()=>{
+let sheetSrc=null;
+function openSheet(preferAI){
   if(!roomImg||!VIEWS.length) return;
-  const out=cvs(roomImg.width,roomImg.height);
-  const oc=out.getContext('2d');
-  const wasCompare=S.compare; S.compare=false;
-  render(oc,1,false);
-  S.compare=wasCompare;
-  const url=out.toDataURL('image/png');
+  sheetSrc=cvs(roomImg.width,roomImg.height);
+  const was=S.compare; S.compare=false;
+  render(sheetSrc.getContext('2d'),1,false);
+  S.compare=was;
+  showSheet(preferAI && aiResult ? 'ai' : 'src');
+  $('sheet').hidden=false;
+}
+function showSheet(which){
+  const useAI = which==='ai' && !!aiResult;
+  const url = useAI ? aiResult : sheetSrc.toDataURL('image/png');
   $('sheet-img').src=url;
-  setupShare(out);
-  $('sheet-msg').innerHTML = inFrame
-    ? '在圖片上<b>按右鍵 → 另存圖片</b>（手機請長按）即可儲存原始解析度的合成圖。'
-    : '合成圖已產生（'+roomImg.width+'×'+roomImg.height+'）。可直接下載，或在圖片上按右鍵另存。';
+
+  const t=$('btn-sheet-src');
+  t.hidden=!aiResult;
+  t.textContent = useAI ? '看原始合成圖' : '看 AI 版';
+  t.onclick = ()=>showSheet(useAI?'src':'ai');
+
+  $('sheet-msg').innerHTML =
+    (inFrame ? '在圖片上<b>按右鍵 → 另存圖片</b>（手機請長按）即可儲存。'
+             : '可直接下載，或在圖片上按右鍵另存。')
+    + (useAI ? ' <b style="color:var(--warn)">這是 AI 融合版，商品細節可能與實機有出入。</b>'
+             : ' 原始解析度 '+roomImg.width+'×'+roomImg.height+'。');
+
+  setupShare(url);
   const dl=$('btn-dl');
   dl.hidden=inFrame;
   dl.onclick=()=>{
     const a=document.createElement('a');
-    a.href=url; a.download='lg-visualizer-'+Date.now()+'.png';
+    a.href=url; a.download='LG-空間預覽-'+Date.now()+'.png';
     document.body.appendChild(a); a.click(); a.remove();
   };
-  $('sheet').hidden=false;
-});
+}
+$('btn-export').addEventListener('click',()=>openSheet(false));
 /* 手機上「長按另存」很笨拙。系統分享選單可以直接存到相簿、傳 LINE 給客戶，
    而且圖片仍然沒有離開裝置 —— 是使用者自己決定要分享給誰。 */
-function setupShare(canvas){
+/* 手動解 dataURL，不用 fetch()：CSP 的 connect-src 只開放 Google 那一個端點，
+   fetch('data:...') 會被一起擋掉。 */
+function dataURLtoBlob(u){
+  const i=u.indexOf(','), mime=(u.slice(0,i).match(/data:([^;]+)/)||[])[1]||'image/png';
+  const bin=atob(u.slice(i+1)), arr=new Uint8Array(bin.length);
+  for(let n=0;n<bin.length;n++) arr[n]=bin.charCodeAt(n);
+  return new Blob([arr],{type:mime});
+}
+function setupShare(url){
   const btn=$('btn-share');
   btn.hidden=true;
   if(!(navigator.canShare && navigator.share)) return;
@@ -1313,7 +1451,7 @@ function setupShare(canvas){
   btn.onclick=async ()=>{
     btn.disabled=true;
     try{
-      const blob=await new Promise(r=>canvas.toBlob(r,'image/png'));
+      const blob=dataURLtoBlob(url);
       const file=new File([blob],'LG-空間預覽-'+Date.now()+'.png',{type:'image/png'});
       if(!navigator.canShare({files:[file]})){ flash('這個瀏覽器不支援分享圖片，請長按圖片另存。'); return; }
       await navigator.share({files:[file], title:'空間合成圖'});
@@ -1346,6 +1484,9 @@ syncCamPresets();
 markChips();
 lightLabel();
 renderViews();
+$('ai-key').value=lsGet('lgv.aiKey');
+$('ai-model').value=lsGet('lgv.aiModel')||AI_DEFAULT_MODEL;
+setAiMode('light');
 paint();
 /* ============================================================
    手機／平板：底部面板 + 步驟分頁 + 雙指縮放
