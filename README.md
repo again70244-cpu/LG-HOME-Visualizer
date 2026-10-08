@@ -73,6 +73,34 @@ AI 回傳的解析度通常低於原始照片。
 模型名稱是可編輯欄位，預設 `gemini-2.5-flash-image` —— 這類模型改名頻繁，
 Google 換名時改那一欄即可，不用動程式。
 
+## 與 bonus/ 共存
+
+這個 repo 底下有兩個獨立的 PWA：根目錄的空間合成工作台，以及 `bonus/` 的業務獎金
+追蹤器。它們共用同一個網域，所以共用 localStorage、Cache Storage 與 Service Worker
+的範圍 —— 三者都必須明確隔離。
+
+| 項目 | 視覺化工具 | 獎金追蹤器 |
+|---|---|---|
+| Cache Storage | `lgv-*` | `lg-bonus-*` |
+| localStorage | `lgv.*` | `lg-bonus-*` |
+| Service Worker 範圍 | `/`（但只處理白名單內的檔案） | `/bonus/` |
+
+**根目錄的 Service Worker 是唯一的風險點。** 它的範圍涵蓋整個網站，包含 `/bonus/`，
+所以它改成只攔截**屬於自己的檔案**（`index.html`、`app.css`、`app.js`、
+`manifest.webmanifest`、`fonts/`、`icons/`），其餘一律放行。
+
+採白名單而不是排除 `bonus/`，是因為之後再加第三、第四個 App 都不必回來改這裡。
+
+沒有這層隔離時會發生兩件事：根目錄 SW 的導航後備是 `caches.match('./')`，
+**離線開啟 `/bonus/` 會跑出視覺化工具**；而它的網路優先處理會把 bonus 的檔案
+一併收進 `lgv-` 快取。兩者都已驗證不再發生。
+
+兩邊的 `activate` 也都只清除自己前綴的舊快取，不會互刪。
+
+> 已知且可接受：根目錄 manifest 的 `scope` 解析為 `/`，所以涵蓋 `/bonus/`。
+> 兩個 App 之間沒有互相連結，實務上不會遇到。要徹底分開就得把視覺化工具移到
+> 子目錄，但那會改變現有網址並讓已安裝的 PWA 失效，不值得。
+
 ## 部署
 
 靜態託管即可，不需要伺服器端執行環境。

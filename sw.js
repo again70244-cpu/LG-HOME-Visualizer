@@ -12,7 +12,22 @@ const SHELL = [
   './icons/icon-192.png', './icons/icon-512.png',
   './icons/icon-180.png', './icons/icon-maskable-512.png'
 ];
-const IMMUTABLE = /\/(fonts|icons)\//;
+/* 這個 repo 底下不只一個 App（bonus/ 是另一個 PWA，有自己的 Service Worker）。
+   這支 SW 的範圍是網站根目錄，會涵蓋到別人的路徑，所以改成「白名單自己的檔案」：
+   凡不屬於本 App 的請求一律不攔截，直接放行給網路與對方的 SW。
+   採白名單而非排除 bonus/，是為了之後再加第幾個 App 都不必回來改這裡。 */
+const BASE = new URL('./', self.location).pathname;
+const OWN_FILES = new Set(['', 'index.html', 'preview.html', 'app.css', 'app.js',
+                           'manifest.webmanifest', 'sw.js']);
+const OWN_DIRS = ['fonts/', 'icons/'];
+function ownPath(url){
+  const u = new URL(url);
+  if (u.origin !== location.origin) return null;
+  if (!u.pathname.startsWith(BASE)) return null;
+  const rel = u.pathname.slice(BASE.length);
+  if (OWN_FILES.has(rel) || OWN_DIRS.some(d => rel.startsWith(d))) return rel;
+  return null;                                   // 別的 App 的東西，不是我的事
+}
 
 /* 逐一快取，不用 addAll。addAll 是全有全無的：只要有一個項目回傳轉址
    （Cloudflare 預設會把 /index.html 轉到 /）或 404，整個安裝就失敗，
@@ -44,9 +59,10 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET') return;
-  if (new URL(req.url).origin !== location.origin) return;   // 本來就不該有外部請求
+  const rel = ownPath(req.url);
+  if (rel === null) return;                                   // 不是本 App 的檔案，完全不碰
 
-  if (IMMUTABLE.test(req.url)) {                              // 快取優先
+  if (OWN_DIRS.some(d => rel.startsWith(d))) {                // 字體與圖示：快取優先
     e.respondWith((async () => {
       const hit = await caches.match(req);
       if (hit) return hit;
