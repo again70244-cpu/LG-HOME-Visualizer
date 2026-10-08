@@ -36,7 +36,7 @@ self.addEventListener('install', e => {
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys()
-      .then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      .then(ks => Promise.all(ks.filter(k => k.startsWith('lgv-') && k !== CACHE).map(k => caches.delete(k))))   // 只清自己的，bonus/ 的快取不要動
       .then(() => self.clients.claim())
   );
 });
