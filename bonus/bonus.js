@@ -27,10 +27,10 @@
     s.people = s.people || {};
     return s;
   }
-  let state = { settings: normalizeSettings(), sales: [], lastBackup: null };
+  let state = { settings: normalizeSettings(), sales: [], lastBackup: null, lastImport: null };
   try {
     const raw = JSON.parse(localStorage.getItem(KEY));
-    if (raw) state = { settings: normalizeSettings(raw.settings), sales: raw.sales || [], lastBackup: raw.lastBackup || null };
+    if (raw) state = { settings: normalizeSettings(raw.settings), sales: raw.sales || [], lastBackup: raw.lastBackup || null, lastImport: raw.lastImport || null };
   } catch {}
   const S = () => state.settings;
 
@@ -127,6 +127,12 @@
     $("campaignDates").textContent = S().start && S().end
       ? `${S().start.replaceAll("-", "/")} – ${S().end.replaceAll("-", "/")}`
       : "尚未設定檔期，請到「規則設定」填寫";
+    const li = state.lastImport;
+    $("dataSource").hidden = !li;
+    if (li) {
+      const d = new Date(li.at);
+      $("dataSource").textContent = `業績來源：銷貨報表${li.period ? `（${li.period}）` : ""}，${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")} 匯入`;
+    }
 
     const nag = $("backupNag");
     const days = state.lastBackup ? (Date.now() - state.lastBackup) / 864e5 : Infinity;
@@ -230,7 +236,7 @@
     $("recBody").innerHTML = rows.length ? rows.map((s) => `<tr class="${s.id === editingId ? "editing" : ""}">
         <td class="num">${esc((s.date || "").slice(5).replace("-", "/"))}</td>
         <td>${esc(s.staff)}</td>
-        <td>${esc(s.model)}${s.cat && catName[s.cat] ? `<span class="tag">${esc(catName[s.cat])}</span>` : ""}${s.kind === "opening" ? `<span class="tag open">期初 ${s.count} 筆</span>` : ""}</td>
+        <td>${esc(s.model)}${s.cat && catName[s.cat] ? `<span class="tag">${esc(catName[s.cat])}</span>` : ""}${s.kind === "opening" ? `<span class="tag open">期初 ${s.count} 筆</span>` : ""}${s.kind === "report" ? `<span class="tag open">報表</span>` : ""}</td>
         <td class="r num">${s.qty ? fmt(s.qty) : "–"}</td>
         <td class="r num">${fmt(s.amount)}</td>
         <td class="r">${pendingDelete === s.id
@@ -583,6 +589,117 @@
     catch { flash("reportMsg", "err", "無法自動複製，這個瀏覽器不允許。請改用分享圖片。"); }
   });
 
+  /* ---------- 匯入銷貨報表 ----------
+     讀系統匯出的「專櫃銷貨毛利明細表」(.xlsx)，算法跟門市的 Excel 獎金試算表相同：
+     個人業績 = 品牌 LG、採購大類不是「資訊商品」的抽成前銷貨金額；
+     指定品項台數 = 型號完全符合清單的數量（合賣是 0.5 台）。
+     只保留算獎金需要的欄位，客戶姓名、電話、地址都不會存進 App。
+     匯入會整份取代現有的銷售紀錄（含手動登錄與期初資料），取代前先自動下載備份。 */
+  const REPORT_COLS = { model: "品名", staff: "營業員姓名", qty: "數量", amount: "抽成前銷貨金額", brand: "品牌名稱", group: "採購大類名稱", date: "異動日期", order: "來源訂單單號" };
+  const REPORT_REQUIRED = ["model", "staff", "qty", "amount", "brand", "group"];
+
+  // Excel 的日期是 1899-12-30 起算的天數；文字日期則統一成 YYYY-MM-DD
+  function reportDate(v) {
+    if (typeof v === "number") return new Date(Date.UTC(1899, 11, 30) + Math.round(v) * 864e5).toISOString().slice(0, 10);
+    const m = String(v || "").match(/(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})/);
+    return m ? `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}` : "";
+  }
+  const cell = (v) => (v == null ? "" : String(v).trim());
+
+  function parseReport(rows) {
+    const hi = rows.findIndex((r) => r && r.includes(REPORT_COLS.staff) && r.includes(REPORT_COLS.amount));
+    if (hi < 0) throw new Error("no_header");
+    const H = Object.fromEntries(Object.entries(REPORT_COLS).map(([k, name]) => [k, rows[hi].indexOf(name)]));
+    const missing = REPORT_REQUIRED.filter((k) => H[k] < 0).map((k) => REPORT_COLS[k]);
+    if (missing.length) { const e = new Error("missing_cols"); e.cols = missing; throw e; }
+    let period = "";
+    for (const r of rows.slice(0, hi)) for (const v of r || []) { const m = cell(v).match(/查詢期間[:：]\s*(.+)/); if (m) period = m[1].trim(); }
+    // 小計列和結尾的 cwpcr002 列沒有業務與型號，自然被濾掉
+    const data = rows.slice(hi + 1).filter((r) => r && cell(r[H.staff]) && cell(r[H.model])).map((r) => ({
+      model: cell(r[H.model]), staff: cell(r[H.staff]), qty: Number(r[H.qty]) || 0, amount: Number(r[H.amount]) || 0,
+      brand: cell(r[H.brand]).toUpperCase(), group: cell(r[H.group]),
+      date: H.date >= 0 ? reportDate(r[H.date]) : "", order: H.order >= 0 ? cell(r[H.order]) : "",
+    }));
+    return { period, rows: data };
+  }
+
+  // 報表跟 Excel 一樣用「型號完全相同」對應指定品項（只忽略大小寫、空白、連字號）
+  function catForModelExact(model) {
+    const m = normModel(model);
+    return m ? (S().cats || []).find((c) => (c.models || []).some((k) => normModel(k) === m)) || null : null;
+  }
+
+  function reportToSales(rep) {
+    const staff = new Set(S().staff || []);
+    const skipped = {};
+    const seenOrder = new Set();
+    const sales = [];
+    const now = Date.now();
+    for (const r of rep.rows) {
+      if (!staff.has(r.staff)) { skipped[r.staff] = (skipped[r.staff] || 0) + 1; continue; }
+      const counts = r.brand === "LG" && r.group !== "資訊商品";
+      const cat = catForModelExact(r.model);
+      if (!counts && !cat) continue;
+      // 成交筆數：同一位業務的同一張訂單只算一次（冷氣內機加外機是同一筆成交）
+      const key = r.staff + "|" + r.order;
+      let count = 0;
+      if (counts && r.amount > 0 && (!r.order || !seenOrder.has(key))) { count = 1; if (r.order) seenOrder.add(key); }
+      sales.push({ id: uid(), kind: "report", date: r.date, staff: r.staff, model: r.model, qty: r.qty, amount: counts ? r.amount : 0, cat: cat ? cat.id : null, count, createdAt: now });
+    }
+    return { sales, skipped };
+  }
+
+  let pendingReport = null;
+  $("importReport").addEventListener("change", async (e) => {
+    const f = e.target.files?.[0]; e.target.value = "";
+    if (!f) return;
+    $("reportConfirm").hidden = true; pendingReport = null;
+    flash("reportImportMsg", "", "讀取中…");
+    let rep;
+    try { rep = parseReport(await window.readXlsx(await f.arrayBuffer())); }
+    catch (err) {
+      const msg = {
+        no_decompress: "這個瀏覽器版本太舊，無法讀取 .xlsx。請把 Chrome 更新到最新版。",
+        not_zip: "這不是 .xlsx 檔案。請選擇從系統匯出的專櫃銷貨毛利明細表。",
+        bad_zip: "檔案已損壞，請重新匯出一次。",
+        no_header: "找不到「營業員姓名」和「抽成前銷貨金額」欄位。請確認選的是專櫃銷貨毛利明細表。",
+        missing_cols: `報表缺少這些欄位：${(err.cols || []).join("、")}。`,
+      }[err?.message] || "無法讀取這個檔案。請確認是從系統匯出的 .xlsx 專櫃銷貨毛利明細表。";
+      return flash("reportImportMsg", "err", msg);
+    }
+    if (!(S().staff || []).length) return flash("reportImportMsg", "err", "請先到「規則設定」新增業務名單，匯入時只會計算名單裡的業務。");
+    const { sales, skipped } = reportToSales(rep);
+    const catName = Object.fromEntries((S().cats || []).map((c) => [c.id, c.name]));
+    const per = (S().staff || []).map((n) => {
+      const mine = sales.filter((s) => s.staff === n);
+      const units = {};
+      for (const s of mine) if (s.cat) units[s.cat] = (units[s.cat] || 0) + s.qty;
+      const unitTxt = Object.entries(units).map(([c, q]) => `${esc(catName[c])} ${fmtUnits(q)} 台`).join("、");
+      return `<tr><td>${esc(n)}</td><td class="r num">${fmt(mine.reduce((a, s) => a + s.amount, 0))}</td><td>${unitTxt || "—"}</td></tr>`;
+    }).join("");
+    const skippedTxt = Object.entries(skipped).map(([n, c]) => `${esc(n)}（${c} 筆）`).join("、");
+    pendingReport = { sales, period: rep.period, file: f.name };
+    $("reportSummary").innerHTML = `
+      <p>${rep.period ? `報表期間 <b>${esc(rep.period)}</b>，` : ""}共 ${fmt(rep.rows.length)} 筆明細，計入 ${fmt(sales.length)} 筆。</p>
+      <div class="tbl-wrap"><table><thead><tr><th>業務</th><th class="r">LG 業績</th><th>指定品項</th></tr></thead><tbody>${per}</tbody></table></div>
+      ${skippedTxt ? `<p class="hint">不在業務名單、已略過：${skippedTxt}</p>` : ""}
+      <p>匯入會<b>取代</b>目前的 ${fmt(state.sales.length)} 筆銷售紀錄（包含手動登錄與期初資料）${state.sales.length ? "，取代前會先自動下載一份備份" : ""}。</p>`;
+    $("reportConfirm").hidden = false;
+    $("reportImportMsg").textContent = "";
+  });
+  $("reportCancel").addEventListener("click", () => { pendingReport = null; $("reportConfirm").hidden = true; });
+  $("reportGo").addEventListener("click", () => {
+    if (!pendingReport) return;
+    if (state.sales.length) exportBackup();
+    state.sales = pendingReport.sales;
+    // 報表已經記到每位業務名下，期初台數不再需要
+    for (const c of S().cats || []) c.opening = 0;
+    state.lastImport = { at: Date.now(), period: pendingReport.period, file: pendingReport.file };
+    pendingReport = null; $("reportConfirm").hidden = true;
+    resetForm(); draft = null;
+    if (commit()) flash("reportImportMsg", "ok", "已匯入報表，總覽已重新計算。");
+  });
+
   /* ---------- 備份 ---------- */
   function backupPayload() {
     return JSON.stringify({ app: "lg-bonus", version: 1, exportedAt: new Date().toISOString(), settings: S(), sales: state.sales }, null, 2);
@@ -689,7 +806,7 @@
   // 另一個分頁改了資料時同步過來，避免兩個分頁互相覆蓋
   window.addEventListener("storage", (e) => {
     if (e.key !== KEY || !e.newValue) return;
-    try { const raw = JSON.parse(e.newValue); state = { settings: normalizeSettings(raw.settings), sales: raw.sales || [], lastBackup: raw.lastBackup || null }; } catch { return; }
+    try { const raw = JSON.parse(e.newValue); state = { settings: normalizeSettings(raw.settings), sales: raw.sales || [], lastBackup: raw.lastBackup || null, lastImport: raw.lastImport || null }; } catch { return; }
     if (!dirty) draft = null;
     renderAll();
   });
