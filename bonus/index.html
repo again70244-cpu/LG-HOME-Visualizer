@@ -24,6 +24,7 @@
     <div class="brand">
       <h1 id="campaignTitle">業務獎金</h1>
       <small id="campaignDates">尚未設定檔期</small>
+      <small id="dataSource" hidden></small>
     </div>
     <div class="priv"><i></i>資料只存在這台裝置</div>
     <nav class="tabs" role="tablist">
@@ -56,6 +57,21 @@
 
   <!-- ========== 銷售登錄 ========== -->
   <section class="view" id="view-entry" hidden>
+    <div class="panel">
+      <div class="toolbar">
+        <h2>匯入銷貨報表</h2>
+        <label class="btn file">選擇報表檔案<input type="file" id="importReport" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></label>
+      </div>
+      <p class="hint">從系統匯出「專櫃銷貨毛利明細表」（.xlsx），選擇檔案後會自動算出每位業務的 LG 業績（不含資訊商品）與指定品項台數。匯入會取代目前所有銷售紀錄，包含下方手動登錄的資料。客戶姓名、電話、地址不會被讀取或保存。</p>
+      <div class="msg" id="reportImportMsg" role="status"></div>
+      <div class="confirm-box" id="reportConfirm" hidden>
+        <div id="reportSummary"></div>
+        <div class="btns">
+          <button class="btn" type="button" id="reportGo">確認匯入</button>
+          <button class="btn ghost" type="button" id="reportCancel">取消</button>
+        </div>
+      </div>
+    </div>
     <div class="entry-grid">
       <form class="panel" id="saleForm" autocomplete="off">
         <div class="toolbar"><h2 id="formTitle">新增一筆銷售</h2><button class="btn ghost small" type="button" id="cancelEdit" hidden>取消編輯</button></div>
@@ -82,6 +98,7 @@
           <input type="number" id="fAmount" class="big" min="0" step="1" inputmode="numeric" placeholder="0" required>
         </div>
         <button class="btn" type="submit" id="saveSale">登錄這筆銷售</button>
+        <p class="hint">手動登錄適合報表還沒更新的成交。下次匯入報表時，這些資料會被報表取代。</p>
         <div class="msg" id="saleMsg" role="status"></div>
       </form>
 
@@ -236,6 +253,7 @@
     </div>
   </section>
 </main>
+<script src="xlsx.js"></script>
 <script src="bonus.js"></script>
 </body>
 </html>
