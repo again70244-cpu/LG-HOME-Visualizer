@@ -178,7 +178,7 @@
 
       <div class="panel">
         <h2>冷氣條件</h2>
-        <p class="hint">依每位業務的冷氣銷售台數，決定獎金實際發放的比例。台數可以有小數。</p>
+        <p class="hint">依每位業務全年的冷氣銷售台數，決定個人業績獎金的發放比例。只影響個人業績獎金，指定品項台獎不受影響。台數可以有小數。</p>
         <div class="col-lbl tier"><span>冷氣台數達（台）</span><span>發放比例（%）</span><span></span></div>
         <div class="list-ed" id="acEd"></div>
         <div><button class="btn ghost small" type="button" id="addAc">＋ 新增級距</button></div>
@@ -186,7 +186,7 @@
 
       <div class="panel">
         <h2>目標條件</h2>
-        <p class="hint">每個沒有達成的目標，從獎金扣掉設定的比例。是否達成由門市自行確認，在下方「每人條件」勾選。</p>
+        <p class="hint">影響應領總額（含台獎）。每項沒有達成的目標各打一次折，例如兩項各扣 10%：一項未達成領 90%，兩項都未達成領 90% × 90% ＝ 81%。是否達成由門市自行確認，在下方「每人條件」勾選。</p>
         <div class="col-lbl tier"><span>目標名稱</span><span>未達成扣（%）</span><span></span></div>
         <div class="list-ed" id="condEd"></div>
         <div><button class="btn ghost small" type="button" id="addCond">＋ 新增目標</button></div>
@@ -194,7 +194,7 @@
 
       <div class="panel">
         <h2>每人條件</h2>
-        <p class="hint">實領獎金 ＝（個人業績獎金 ＋ 指定品項台獎）× 冷氣發放比例 ×（1 − 未達成目標的扣減合計）。冷氣台數沒填的業務以 0 台計算。</p>
+        <p class="hint">實領獎金 ＝（個人業績獎金 × 冷氣係數 ＋ 指定品項台獎）× 附加指標係數。冷氣台數沒填的業務以 0 台計算；目標沒勾的視為未達成。</p>
         <div id="peopleEd"></div>
       </div>
 

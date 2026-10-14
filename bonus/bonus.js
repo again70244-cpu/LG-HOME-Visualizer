@@ -108,15 +108,19 @@
       let dzBonus = 0;
       for (const s of mine) if (s.cat && cs[s.cat]) dzBonus += (s.qty || 0) * cs[s.cat].perUnit;
       const ratio = p.next ? Math.min(1, amount / p.next.threshold) : (tiersSorted().length ? 1 : 0);
-      // 實領 = (個人獎金 + 台獎) × 冷氣比例 × (1 − 未達成目標的扣減合計)，對應 Excel 的 D → E → H 欄
-      const subtotal = p.bonus + dzBonus;
+      // 依公司扣減條件說明：
+      //   冷氣係數只乘在個人業績獎金上，台獎不受影響；
+      //   附加指標影響應領總額（含台獎），每項未達成各乘一次，兩項都未達成是 90% × 90% = 81%。
+      // 實領 =（個人業績獎金 × 冷氣係數 ＋ 台獎）× Π(1 − 未達成指標的扣減)
       const who = personOf(name);
       const ac = Number(who.ac) || 0;
       const acPct = acRate(ac);
+      const personalAfterAc = p.bonus * (acPct ?? 1);
+      const subtotal = personalAfterAc + dzBonus;
       const unmet = (S().conditions || []).filter((c) => !(who.met || {})[c.id]);
-      const deduct = unmet.reduce((a, c) => a + (c.deduct || 0), 0);
-      const total = subtotal * (acPct ?? 1) * Math.max(0, 1 - deduct);
-      return { name, amount, count, ...p, ratio, dzBonus, subtotal, ac, acPct, unmet, deduct, total, active: S().staff.includes(name) };
+      const factor = unmet.reduce((a, c) => a * Math.max(0, 1 - (c.deduct || 0)), 1);
+      const total = subtotal * factor;
+      return { name, amount, count, ...p, ratio, dzBonus, personalAfterAc, subtotal, ac, acPct, unmet, factor, total, active: S().staff.includes(name) };
     }).sort((a, b) => b.amount - a.amount);
   }
 
@@ -178,10 +182,10 @@
           <dl class="ledger">
             <dt>成交筆數</dt><dd>${fmt(s.count)}</dd>
             <dt>個人業績獎金</dt><dd>${fmt(s.bonus)}</dd>
+            ${s.acPct != null ? `<dt>冷氣 ${fmtUnits(s.ac)} 台 × ${Math.round(s.acPct * 100)}%</dt><dd>${fmt(s.personalAfterAc)}</dd>` : ""}
             <dt>指定品項台獎</dt><dd>${fmt(s.dzBonus)}</dd>
             ${s.acPct != null || (S().conditions || []).length ? `<dt>小計</dt><dd>${fmt(s.subtotal)}</dd>` : ""}
-            ${s.acPct != null ? `<dt>冷氣 ${fmtUnits(s.ac)} 台</dt><dd>× ${Math.round(s.acPct * 100)}%</dd>` : ""}
-            ${s.unmet.map((c) => `<dt>未達成：${esc(c.name)}</dt><dd>− ${Math.round(c.deduct * 100)}%</dd>`).join("")}
+            ${s.unmet.map((c) => `<dt>未達成：${esc(c.name)}</dt><dd>× ${Math.round((1 - c.deduct) * 100)}%</dd>`).join("")}
             <dt class="total">實領獎金</dt><dd class="total">${fmt(s.total)}</dd>
           </dl>
         </article>`;
