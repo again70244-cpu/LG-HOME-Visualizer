@@ -494,13 +494,17 @@
     const o = reportOpts();
     const cs = catState(), stats = staffStats(cs), cats = Object.values(cs);
     const hasTiers = tiersSorted().length > 0;
-    const W = 1080, P = 56, ROW = 116, DZROW = 64;
+    // 勾選冷氣台數時，每位業務下方多畫一塊跟總覽卡片相同的冷氣區塊
+    const showAc = o.ac && (S().acTiers || []).length > 0;
+    const AC_H = 112;
+    const W = 1080, P = 56, ROW = showAc ? 108 + AC_H + 18 : 116, DZROW = 64;
     const H = P + 150 + 50 + Math.max(1, stats.length) * ROW + (o.dz && cats.length ? 90 + cats.length * DZROW : 0) + 90;
     const cv = document.createElement("canvas");
     cv.width = W; cv.height = H;
     const g = cv.getContext("2d");
     const F = (w, size) => `${w} ${size}px "Archivo","Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif`;
-    const C = { bg: "#ffffff", ink: "#1d1a21", muted: "#6c6573", line: "#e4e0e8", accent: "#b80d42", track: "#ece8ef", good: "#17845a", warn: "#b26a00" };
+    const C = { bg: "#ffffff", ink: "#1d1a21", muted: "#6c6573", line: "#e4e0e8", accent: "#b80d42", track: "#ece8ef", good: "#17845a", warn: "#b26a00",
+      goodSoft: "#e3f3ec", warnSoft: "#fbf0dc", accentSoft: "#f8e6ec" };
 
     g.fillStyle = C.bg; g.fillRect(0, 0, W, H);
     g.fillStyle = C.accent; g.fillRect(0, 0, W, 10);
@@ -526,14 +530,6 @@
       const top = y + i * ROW;
       g.fillStyle = C.muted; g.font = F(700, 26); g.fillText(String(i + 1), P, top + 40);
       g.fillStyle = C.ink; g.font = F(700, 30); g.fillText(s.name, P + 44, top + 40);
-      if (o.ac && s.acPct != null) {
-        // 冷氣台數接在姓名後面，用狀態色標出來
-        const nameW = g.measureText(s.name).width;
-        const st = acState(s);
-        g.fillStyle = st === "full" ? C.good : st === "part" ? C.warn : C.accent;
-        g.font = F(700, 22);
-        g.fillText(s.acSet ? `冷氣 ${fmtUnits(s.ac)} 台・${Math.round(s.acPct * 100)}%` : "冷氣 未填", P + 44 + nameW + 18, top + 39);
-      }
       g.font = F(700, 32); g.textAlign = "right";
       const rightX = W - P;
       if (o.bonus) {
@@ -554,6 +550,7 @@
         if (o.rate) parts.push(`獎金率 ${pct(s.rate)}`);
         g.fillStyle = C.muted; g.font = F(500, 18); g.fillText(parts.join("・"), bx, by + 36);
       }
+      if (showAc) drawAcBox(g, s, P + 44, top + 108, W - P - (P + 44), AC_H, F, C);
       g.fillStyle = C.line; g.fillRect(P, top + ROW - 2, W - 2 * P, 1);
     });
     y += Math.max(1, stats.length) * ROW;
@@ -579,6 +576,42 @@
     g.fillStyle = C.muted; g.font = F(500, 18);
     g.fillText("本表為截至更新時間的統計，實際獎金以公司核發為準。", P, H - 40);
     return cv;
+  }
+  // 報表圖片裡的冷氣區塊：左邊台數、中間級距格子、右邊發放比例，配色與總覽卡片一致
+  function drawAcBox(g, s, x, y, w, h, F, C) {
+    const st = acState(s);
+    const main = st === "full" ? C.good : st === "part" ? C.warn : C.accent;
+    const soft = st === "full" ? C.goodSoft : st === "part" ? C.warnSoft : C.accentSoft;
+    g.fillStyle = soft; roundRect(g, x, y, w, h, 14); g.fill();
+    g.strokeStyle = main; g.lineWidth = 2; roundRect(g, x + 1, y + 1, w - 2, h - 2, 13); g.stroke();
+
+    g.textAlign = "left";
+    g.fillStyle = C.muted; g.font = F(700, 20); g.fillText("冷氣（全年）", x + 24, y + 38);
+    g.fillStyle = main; g.font = F(800, 50);
+    const num = s.acSet ? fmtUnits(s.ac) : "未填";
+    g.fillText(num, x + 24, y + 94);
+    if (s.acSet) { const nw = g.measureText(num).width; g.font = F(600, 24); g.fillText("台", x + 24 + nw + 8, y + 92); }
+
+    g.textAlign = "right";
+    g.fillStyle = main; g.font = F(800, 34); g.fillText(`發放 ${Math.round(s.acPct * 100)}%`, x + w - 24, y + 50);
+    const nx = acNext(s.ac);
+    g.fillStyle = C.ink; g.font = F(600, 20);
+    g.fillText(!s.acSet ? "冷氣台數未填" : nx ? `再 ${fmtUnits(nx.need)} 台 → ${Math.round(nx.pct * 100)}%` : "已達最高級", x + w - 24, y + 88);
+
+    const tiers = [...(S().acTiers || [])].filter((t) => t.min > 0).sort((a, b) => a.min - b.min);
+    if (tiers.length) {
+      const sx = x + 220, ex = x + w - 250, gap = 10;
+      const cw = (ex - sx - gap * (tiers.length - 1)) / tiers.length, ch = 68, cy = y + (h - ch) / 2;
+      g.textAlign = "center";
+      tiers.forEach((t, i) => {
+        const cx = sx + i * (cw + gap), hit = s.ac >= t.min;
+        g.fillStyle = hit ? main : "#ffffff"; roundRect(g, cx, cy, cw, ch, 8); g.fill();
+        g.fillStyle = hit ? "#ffffff" : C.muted;
+        g.font = F(700, 20); g.fillText(`${fmtUnits(t.min)}台`, cx + cw / 2, cy + 29);
+        g.font = F(700, 20); g.fillText(`${Math.round(t.pct * 100)}%`, cx + cw / 2, cy + 55);
+      });
+    }
+    g.textAlign = "left";
   }
   function roundRect(g, x, y, w, h, r) {
     g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r);
