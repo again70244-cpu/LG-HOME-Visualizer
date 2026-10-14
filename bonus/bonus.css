@@ -17,6 +17,8 @@
   --good: #17845a;
   --warn: #b26a00;
   --track: #ece8ef;
+  --good-soft: #e3f3ec;
+  --warn-soft: #fbf0dc;
   --font-body: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
   --font-num: "Archivo", "Noto Sans TC", system-ui, sans-serif;
   --r: 10px;
@@ -27,6 +29,7 @@
   :root {
     --bg: #141217; --surface: #1e1b22; --ink: #f0edf3; --muted: #a49cab; --line: #322d38;
     --accent: #ff5c8a; --accent-soft: #3a1a26; --on-accent: #1b0a10; --good: #4cc98f; --warn: #e5a13a; --track: #2c2832;
+    --good-soft: #15302a; --warn-soft: #36290f;
     color-scheme: dark;
   }
 }
@@ -92,6 +95,26 @@ dl.ledger dd { margin: 0; text-align: right; font-family: var(--font-num); font-
 dl.ledger .total { color: var(--ink); font-weight: 700; padding-top: 4px; border-top: 1px dashed var(--line); }
 dl.ledger dd.total { color: var(--accent); font-size: 17px; }
 dl.ledger.wide { max-width: 420px; }
+
+/* 冷氣：卡片上的醒目區塊，底色依發放比例 —— 滿額綠、部分橘、0% 或未填紅 */
+.ac-box { border-radius: 8px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; border: 1px solid transparent; }
+.ac-box.full { background: var(--good-soft); border-color: var(--good); }
+.ac-box.part { background: var(--warn-soft); border-color: var(--warn); }
+.ac-box.none { background: var(--accent-soft); border-color: var(--accent); }
+.ac-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.ac-main { display: flex; flex-direction: column; }
+.ac-lbl { font-size: 13px; font-weight: 700; color: var(--muted); }
+.ac-num { font-family: var(--font-num); font-size: 34px; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.ac-num small { font-size: 16px; font-weight: 600; margin-left: 4px; font-family: var(--font-body); }
+.ac-box.full .ac-num, .ac-box.full .ac-pct { color: var(--good); }
+.ac-box.part .ac-num, .ac-box.part .ac-pct { color: var(--warn); }
+.ac-box.none .ac-num, .ac-box.none .ac-pct { color: var(--accent); }
+.ac-side { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; text-align: right; }
+.ac-pct { font-family: var(--font-num); font-size: 20px; font-weight: 800; }
+.ac-next { font-size: 13px; color: var(--ink); font-weight: 600; }
+.ac-steps span { line-height: 1.25; padding: 4px 0; background: var(--surface); }
+.ac-box.full .ac-steps span.hit { background: var(--good); color: var(--surface); }
+.ac-box.part .ac-steps span.hit { background: var(--warn); color: var(--surface); }
 
 .dz-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: 12px; }
 .dz { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }

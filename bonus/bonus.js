@@ -82,6 +82,15 @@
   }
   const personOf = (name) => (S().people || {})[name] || {};
 
+  // 冷氣的下一級：還差幾台、到了領幾 %
+  function acNext(units) {
+    const t = [...(S().acTiers || [])].sort((a, b) => a.min - b.min);
+    const n = t.find((x) => x.min > units);
+    return n ? { need: Math.round((n.min - units) * 100) / 100, pct: n.pct } : null;
+  }
+  // 依發放比例分三種狀態：滿額 / 部分 / 0%（或未填）
+  const acState = (s) => (!s.acSet ? "none" : s.acPct >= 1 ? "full" : s.acPct > 0 ? "part" : "none");
+
   function catState() {
     const map = {};
     for (const c of S().cats || []) {
@@ -113,6 +122,7 @@
       //   附加指標影響應領總額（含台獎），每項未達成各乘一次，兩項都未達成是 90% × 90% = 81%。
       // 實領 =（個人業績獎金 × 冷氣係數 ＋ 台獎）× Π(1 − 未達成指標的扣減)
       const who = personOf(name);
+      const acSet = who.ac != null && who.ac !== "";
       const ac = Number(who.ac) || 0;
       const acPct = acRate(ac);
       const personalAfterAc = p.bonus * (acPct ?? 1);
@@ -120,7 +130,7 @@
       const unmet = (S().conditions || []).filter((c) => !(who.met || {})[c.id]);
       const factor = unmet.reduce((a, c) => a * Math.max(0, 1 - (c.deduct || 0)), 1);
       const total = subtotal * factor;
-      return { name, amount, count, ...p, ratio, dzBonus, personalAfterAc, subtotal, ac, acPct, unmet, factor, total, active: S().staff.includes(name) };
+      return { name, amount, count, ...p, ratio, dzBonus, personalAfterAc, acSet, subtotal, ac, acPct, unmet, factor, total, active: S().staff.includes(name) };
     }).sort((a, b) => b.amount - a.amount);
   }
 
@@ -142,6 +152,22 @@
     const days = state.lastBackup ? (Date.now() - state.lastBackup) / 864e5 : Infinity;
     nag.hidden = !state.sales.length || days < BACKUP_NAG_DAYS;
     if (!nag.hidden) nag.innerHTML = `<b>${state.lastBackup ? `已經 ${Math.floor(days)} 天沒有備份。` : "還沒有備份過。"}</b>資料只存在這台裝置，建議現在下載一份備份檔。<button class="btn small" type="button" data-goto="backup">去備份</button>`;
+  }
+
+  // 冷氣台數放在卡片上半部、用大字與狀態色，一眼就看得出每個人的冷氣進度
+  function acBox(s) {
+    const st = acState(s);
+    const nx = acNext(s.ac);
+    const steps = [...(S().acTiers || [])].filter((t) => t.min > 0).sort((a, b) => a.min - b.min)
+      .map((t) => `<span class="${s.ac >= t.min ? "hit" : ""}">${fmtUnits(t.min)}台<br>${Math.round(t.pct * 100)}%</span>`).join("");
+    return `<div class="ac-box ${st}">
+      <div class="ac-head">
+        <div class="ac-main"><span class="ac-lbl">冷氣（全年）</span><span class="ac-num">${s.acSet ? fmtUnits(s.ac) : "未填"}${s.acSet ? "<small>台</small>" : ""}</span></div>
+        <div class="ac-side"><span class="ac-pct">發放 ${Math.round(s.acPct * 100)}%</span>
+          <span class="ac-next">${!s.acSet ? "請到規則設定填寫" : nx ? `再 ${fmtUnits(nx.need)} 台 → ${Math.round(nx.pct * 100)}%` : "已達最高級"}</span></div>
+      </div>
+      ${steps ? `<div class="steps ac-steps">${steps}</div>` : ""}
+    </div>`;
   }
 
   function renderOverview() {
@@ -179,6 +205,7 @@
           <div class="sales-line"><span class="big">${fmt(s.amount)}</span>${chip}</div>
           <div class="meter"><div class="bar ${n || !hasTiers ? "" : "done"}"><i style="width:${(s.ratio * 100).toFixed(1)}%"></i></div><div class="meter-cap">${cap}</div></div>
           ${n ? `<div class="hint">達標後獎金率 ${pct(n.rate)}</div>` : ""}
+          ${s.acPct != null ? acBox(s) : ""}
           <dl class="ledger">
             <dt>成交筆數</dt><dd>${fmt(s.count)}</dd>
             <dt>個人業績獎金</dt><dd>${fmt(s.bonus)}</dd>
@@ -461,7 +488,7 @@
   const fileStamp = () => localDate().replaceAll("-", "");
 
   /* ---------- 分享報表 ---------- */
-  const reportOpts = () => ({ bonus: $("rBonus").checked, rate: $("rRate").checked, dz: $("rDz").checked });
+  const reportOpts = () => ({ bonus: $("rBonus").checked, rate: $("rRate").checked, dz: $("rDz").checked, ac: $("rAc").checked });
 
   function drawReport() {
     const o = reportOpts();
@@ -473,7 +500,7 @@
     cv.width = W; cv.height = H;
     const g = cv.getContext("2d");
     const F = (w, size) => `${w} ${size}px "Archivo","Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif`;
-    const C = { bg: "#ffffff", ink: "#1d1a21", muted: "#6c6573", line: "#e4e0e8", accent: "#b80d42", track: "#ece8ef", good: "#17845a" };
+    const C = { bg: "#ffffff", ink: "#1d1a21", muted: "#6c6573", line: "#e4e0e8", accent: "#b80d42", track: "#ece8ef", good: "#17845a", warn: "#b26a00" };
 
     g.fillStyle = C.bg; g.fillRect(0, 0, W, H);
     g.fillStyle = C.accent; g.fillRect(0, 0, W, 10);
@@ -499,6 +526,14 @@
       const top = y + i * ROW;
       g.fillStyle = C.muted; g.font = F(700, 26); g.fillText(String(i + 1), P, top + 40);
       g.fillStyle = C.ink; g.font = F(700, 30); g.fillText(s.name, P + 44, top + 40);
+      if (o.ac && s.acPct != null) {
+        // 冷氣台數接在姓名後面，用狀態色標出來
+        const nameW = g.measureText(s.name).width;
+        const st = acState(s);
+        g.fillStyle = st === "full" ? C.good : st === "part" ? C.warn : C.accent;
+        g.font = F(700, 22);
+        g.fillText(s.acSet ? `冷氣 ${fmtUnits(s.ac)} 台・${Math.round(s.acPct * 100)}%` : "冷氣 未填", P + 44 + nameW + 18, top + 39);
+      }
       g.font = F(700, 32); g.textAlign = "right";
       const rightX = W - P;
       if (o.bonus) {
@@ -570,6 +605,7 @@
       let l = `${i + 1}. ${s.name}　${fmt(s.amount)}`;
       if (hasTiers) l += s.next ? `（${pct(s.ratio)}）` : "（已達最高門檻）";
       if (o.rate && hasTiers) l += `　獎金率 ${pct(s.rate)}`;
+      if (o.ac && s.acPct != null) l += s.acSet ? `　冷氣 ${fmtUnits(s.ac)} 台（${Math.round(s.acPct * 100)}%）` : "　冷氣 未填";
       if (o.bonus) l += `　獎金 ${fmt(s.total)}`;
       lines.push(l);
     });
@@ -581,7 +617,7 @@
     return lines.join("\n");
   }
 
-  for (const id of ["rBonus", "rRate", "rDz"]) $(id).addEventListener("change", renderReport);
+  for (const id of ["rBonus", "rRate", "rDz", "rAc"]) $(id).addEventListener("change", renderReport);
   $("shareImg").addEventListener("click", async () => {
     const r = await shareOrDownload(await reportBlob(), `業績進度-${fileStamp()}.png`, S().name || "業績進度");
     if (r === "downloaded") flash("reportMsg", "ok", "這個瀏覽器不支援直接分享，已改為下載圖片。");
