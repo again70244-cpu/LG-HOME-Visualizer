@@ -24,6 +24,7 @@
     <div class="brand">
       <h1 id="campaignTitle">業務獎金</h1>
       <small id="campaignDates">尚未設定檔期</small>
+      <small id="dataSource" hidden></small>
     </div>
     <div class="priv"><i></i>資料只存在這台裝置</div>
     <nav class="tabs" role="tablist">
@@ -56,6 +57,21 @@
 
   <!-- ========== 銷售登錄 ========== -->
   <section class="view" id="view-entry" hidden>
+    <div class="panel">
+      <div class="toolbar">
+        <h2>匯入銷貨報表</h2>
+        <label class="btn file">選擇報表檔案<input type="file" id="importReport" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></label>
+      </div>
+      <p class="hint">從系統匯出「專櫃銷貨毛利明細表」（.xlsx），選擇檔案後會自動算出每位業務的 LG 業績（不含資訊商品）與指定品項台數。匯入會取代目前所有銷售紀錄，包含下方手動登錄的資料。客戶姓名、電話、地址不會被讀取或保存。</p>
+      <div class="msg" id="reportImportMsg" role="status"></div>
+      <div class="confirm-box" id="reportConfirm" hidden>
+        <div id="reportSummary"></div>
+        <div class="btns">
+          <button class="btn" type="button" id="reportGo">確認匯入</button>
+          <button class="btn ghost" type="button" id="reportCancel">取消</button>
+        </div>
+      </div>
+    </div>
     <div class="entry-grid">
       <form class="panel" id="saleForm" autocomplete="off">
         <div class="toolbar"><h2 id="formTitle">新增一筆銷售</h2><button class="btn ghost small" type="button" id="cancelEdit" hidden>取消編輯</button></div>
@@ -82,6 +98,7 @@
           <input type="number" id="fAmount" class="big" min="0" step="1" inputmode="numeric" placeholder="0" required>
         </div>
         <button class="btn" type="submit" id="saveSale">登錄這筆銷售</button>
+        <p class="hint">手動登錄適合報表還沒更新的成交。下次匯入報表時，這些資料會被報表取代。</p>
         <div class="msg" id="saleMsg" role="status"></div>
       </form>
 
@@ -111,6 +128,7 @@
           <legend class="lbl">報表內容</legend>
           <label><input type="checkbox" id="rBonus" checked> 獎金金額</label>
           <label><input type="checkbox" id="rRate" checked> 獎金率與距下一門檻</label>
+          <label><input type="checkbox" id="rAc" checked> 冷氣台數</label>
           <label><input type="checkbox" id="rDz" checked> 指定品項累積</label>
         </fieldset>
         <div class="btns">
@@ -161,7 +179,7 @@
 
       <div class="panel">
         <h2>冷氣條件</h2>
-        <p class="hint">依每位業務的冷氣銷售台數，決定獎金實際發放的比例。台數可以有小數。</p>
+        <p class="hint">依每位業務全年的冷氣銷售台數，決定個人業績獎金的發放比例。只影響個人業績獎金，指定品項台獎不受影響。台數可以有小數。</p>
         <div class="col-lbl tier"><span>冷氣台數達（台）</span><span>發放比例（%）</span><span></span></div>
         <div class="list-ed" id="acEd"></div>
         <div><button class="btn ghost small" type="button" id="addAc">＋ 新增級距</button></div>
@@ -169,7 +187,7 @@
 
       <div class="panel">
         <h2>目標條件</h2>
-        <p class="hint">每個沒有達成的目標，從獎金扣掉設定的比例。是否達成由門市自行確認，在下方「每人條件」勾選。</p>
+        <p class="hint">影響應領總額（含台獎）。每項沒有達成的目標各打一次折，例如兩項各扣 10%：一項未達成領 90%，兩項都未達成領 90% × 90% ＝ 81%。是否達成由門市自行確認，在下方「每人條件」勾選。</p>
         <div class="col-lbl tier"><span>目標名稱</span><span>未達成扣（%）</span><span></span></div>
         <div class="list-ed" id="condEd"></div>
         <div><button class="btn ghost small" type="button" id="addCond">＋ 新增目標</button></div>
@@ -177,7 +195,7 @@
 
       <div class="panel">
         <h2>每人條件</h2>
-        <p class="hint">實領獎金 ＝（個人業績獎金 ＋ 指定品項台獎）× 冷氣發放比例 ×（1 − 未達成目標的扣減合計）。冷氣台數沒填的業務以 0 台計算。</p>
+        <p class="hint">實領獎金 ＝（個人業績獎金 × 冷氣係數 ＋ 指定品項台獎）× 附加指標係數。冷氣台數沒填的業務以 0 台計算；目標沒勾的視為未達成。</p>
         <div id="peopleEd"></div>
       </div>
 
@@ -236,6 +254,7 @@
     </div>
   </section>
 </main>
+<script src="xlsx.js"></script>
 <script src="bonus.js"></script>
 </body>
 </html>
