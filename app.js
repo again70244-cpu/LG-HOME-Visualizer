@@ -1309,6 +1309,34 @@ function showSheet(){
   };
 }
 $('btn-export').addEventListener('click',openSheet);
+
+/* 交接給生成式 AI。這個工具保證比例與位置，照片級的光影交給 ChatGPT／Gemini 的 App
+   （免費額度內可用；它們的 API 則沒有免費額度，所以不直接串接）。
+   提示詞帶入當下的實際尺寸，並明確要求不得改動大小與位置 —— 比例是這張圖唯一
+   不能被改掉的東西。這裡只複製文字，頁面依然不對外連線。 */
+function aiPrompt(){
+  const w=Math.round(S.productH*baseAr), d=Math.round(S.depth), h=Math.round(S.productH);
+  return '這是一張合成圖：一台家電（實際尺寸 寬 '+w+' × 深 '+d+' × 高 '+h+' 公分）'
+    + '已經以正確的大小和位置放進真實的房間照片。\n'
+    + '請把它重繪成一張真實拍攝的照片：\n'
+    + '1. 家電的位置、大小、比例完全不變，不要移動、放大或縮小\n'
+    + '2. 房間的牆面、地板、窗戶和其他物品完全不變\n'
+    + '3. 讓家電的光線方向、色溫、反光符合這個房間，並在地面加上自然的接觸陰影\n'
+    + '4. 家電的外型與顏色保持可辨識，材質要像真實的家電\n'
+    + '輸出與原圖相同構圖、相同長寬比的照片。';
+}
+$('btn-prompt').addEventListener('click',async ()=>{
+  const text=aiPrompt(), box=$('prompt-text'), btn=$('btn-prompt');
+  box.value=text;
+  let ok=false;
+  try{ await navigator.clipboard.writeText(text); ok=true; }catch(_){}
+  if(!ok){                       // 剪貼簿不給用時，把文字攤開讓使用者自己選取複製
+    box.hidden=false; box.focus(); box.select();
+    try{ ok=document.execCommand('copy'); }catch(_){}
+  }
+  btn.textContent = ok ? '已複製，到 ChatGPT／Gemini 貼上' : '請長按下方文字複製';
+  setTimeout(()=>{ btn.textContent='複製 AI 提示詞'; },4000);
+});
 /* 手機上「長按另存」很笨拙。系統分享選單可以直接存到相簿、傳 LINE 給客戶，
    而且圖片仍然沒有離開裝置 —— 是使用者自己決定要分享給誰。 */
 /* 手動解 dataURL，不用 fetch()：CSP 的 connect-src 只開放 Google 那一個端點，

@@ -2,7 +2,7 @@
    - 應用程式本體（HTML / CSS / JS / manifest）走「網路優先」，所以推上新版後
      使用者一連線就是新版，不用等快取過期。離線時才退回快取。
    - 字體與圖示走「快取優先」，它們不會在同名檔案下改變，沒必要每次都問網路。 */
-const CACHE = 'lgv-2026-09-17';
+const CACHE = 'lgv-2026-11-11';
 const SHELL = [
   './', './app.css', './app.js', './manifest.webmanifest',
   './fonts/Archivo.woff2',
