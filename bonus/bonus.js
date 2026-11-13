@@ -4,6 +4,8 @@
 (() => {
   const $ = (id) => document.getElementById(id);
   const fmt = (n) => Math.round(n || 0).toLocaleString("zh-TW");
+  // 門檻金額用「萬」顯示，例如 2000000 → 200 萬
+  const wan = (n) => (n % 10000 === 0 ? `${(n / 10000).toLocaleString("zh-TW")} 萬` : fmt(n));
   const fmtUnits = (n) => (Math.round((n || 0) * 100) / 100).toLocaleString("zh-TW");
   const pct = (r) => (Math.round(r * 1000) / 10).toFixed(1) + "%";
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -545,9 +547,14 @@
       if (hasTiers) {
         g.fillStyle = C.track; roundRect(g, bx, by, bw, 10, 5); g.fill();
         g.fillStyle = s.next ? C.accent : C.good; roundRect(g, bx, by, Math.max(10, bw * s.ratio), 10, 5); g.fill();
+        // 每個人的下一個門檻不同（100 萬、200 萬…），達成率旁一定標出目標，避免誤讀
+        if (s.next) {
+          g.fillStyle = C.ink; g.font = F(700, 20);
+          g.fillText(`目標 ${wan(s.next.threshold)}`, bx + bw + 14, by + 10);
+        }
         const parts = [s.next ? `達成 ${pct(s.ratio)}` : "已達最高門檻"];
         if (o.rate && s.next) parts.push(`差 ${fmt(s.next.threshold - s.amount)}`);
-        if (o.rate) parts.push(`獎金率 ${pct(s.rate)}`);
+        if (o.rate) parts.push(s.next ? `獎金率 ${pct(s.rate)} → ${pct(s.next.rate)}` : `獎金率 ${pct(s.rate)}`);
         g.fillStyle = C.muted; g.font = F(500, 18); g.fillText(parts.join("・"), bx, by + 36);
       }
       if (showAc) drawAcBox(g, s, P + 44, top + 108, W - P - (P + 44), AC_H, F, C);
@@ -636,7 +643,7 @@
     const lines = [`【${S().name || "業績進度"}】${stamp()} 更新`];
     stats.forEach((s, i) => {
       let l = `${i + 1}. ${s.name}　${fmt(s.amount)}`;
-      if (hasTiers) l += s.next ? `（${pct(s.ratio)}）` : "（已達最高門檻）";
+      if (hasTiers) l += s.next ? `（目標 ${wan(s.next.threshold)}，達成 ${pct(s.ratio)}）` : "（已達最高門檻）";
       if (o.rate && hasTiers) l += `　獎金率 ${pct(s.rate)}`;
       if (o.ac && s.acPct != null) l += s.acSet ? `　冷氣 ${fmtUnits(s.ac)} 台（${Math.round(s.acPct * 100)}%）` : "　冷氣 未填";
       if (o.bonus) l += `　獎金 ${fmt(s.total)}`;
